@@ -17,7 +17,21 @@ Including another URLconf
 from django.contrib import admin
 from django.urls import path, include
 
+from config import settings
+from django.contrib.staticfiles.urls import static
+from core.queue.scheduler import scheduler, check_expired_subscriptions, check_ending_subscriptions
+
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('bot/', include('bot.urls')),
+    path('payments/', include('order.urls')),
 ]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
+
+
+scheduler.add_job(check_expired_subscriptions, trigger='cron', hour=3, minute=0)
+scheduler.add_job(check_ending_subscriptions, trigger='cron', hour=4, minute=0)

@@ -1,3 +1,4 @@
-# django-aiogram
+# payment-bot
 
-Describe your project here.
+# run the project
+uvicorn config.asgi:application --port 8003

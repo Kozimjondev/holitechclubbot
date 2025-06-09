@@ -13,7 +13,7 @@ async def process_update(request):
     bot_secret_key = request.META.get("HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN")
     if not bot_secret_key:
         return HttpResponse("Missing telegram bot API secret key", status=401)
-    if not request.META.get("HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN") == settings.BOT_SECRET_TOKEN:
+    if not request.META.get("HTTP_X_TELEGRAM_BOT_API_SECRET_TOKEN") == settings.BOT_WEBHOOK_SECRET:
         return HttpResponse("bot API secret key is invalid", status=401)
     if request.method == "POST":
         body_unicode = request.body.decode('utf-8')

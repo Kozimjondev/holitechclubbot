@@ -4,5 +4,5 @@ from django.urls import path
 from .views import process_update
 
 urlpatterns = [
-    path('process-update/', process_update, name=settings.BOT_WEBHOOK_PATH),
+    path('process-update/<str:lang>/', process_update, name=settings.BOT_WEBHOOK_PATH),
 ]

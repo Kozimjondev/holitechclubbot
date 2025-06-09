@@ -22,8 +22,11 @@ aiosignal==1.3.2
     # via aiohttp
 annotated-types==0.7.0
     # via pydantic
+apscheduler==3.11.0
+    # via django-aiogram
 asgiref==3.8.1
     # via django
+    # via django-cors-headers
 asttokens==3.0.0
     # via stack-data
 attrs==25.3.0
@@ -32,15 +35,25 @@ certifi==2025.1.31
     # via aiogram
 click==8.1.8
     # via uvicorn
+colorama==0.4.6
+    # via click
+    # via ipython
+    # via loguru
 decorator==5.2.1
     # via ipython
 django==5.2
     # via django-aiogram
+    # via django-cors-headers
     # via django-phonenumber-field
     # via django-redis
+    # via djangorestframework
+django-cors-headers==4.7.0
+    # via django-aiogram
 django-phonenumber-field==8.0.0
     # via django-aiogram
 django-redis==5.4.0
+    # via django-aiogram
+djangorestframework==3.16.0
     # via django-aiogram
 executing==2.2.0
     # via stack-data
@@ -68,8 +81,6 @@ multidict==6.3.2
     # via yarl
 parso==0.8.4
     # via jedi
-pexpect==4.9.0
-    # via ipython
 phonenumbers==9.0.2
     # via django-aiogram
     # via django-phonenumber-field
@@ -82,8 +93,6 @@ propcache==0.3.1
     # via yarl
 psycopg2-binary==2.9.9
     # via django-aiogram
-ptyprocess==0.7.0
-    # via pexpect
 pure-eval==0.2.3
     # via stack-data
 pydantic==2.10.6
@@ -109,9 +118,16 @@ typing-extensions==4.13.1
     # via aiogram
     # via pydantic
     # via pydantic-core
+tzdata==2025.2
+    # via django
+    # via tzlocal
+tzlocal==5.3.1
+    # via apscheduler
 uvicorn==0.34.0
     # via django-aiogram
 wcwidth==0.2.13
     # via prompt-toolkit
+win32-setctime==1.2.0
+    # via loguru
 yarl==1.19.0
     # via aiohttp

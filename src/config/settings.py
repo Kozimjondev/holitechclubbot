@@ -39,14 +39,18 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    "corsheaders",
+    'rest_framework',
 
     'users',
-    'bot'
+    'bot',
+    'order',
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    "corsheaders.middleware.CorsMiddleware",
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
@@ -122,7 +126,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Asia/Tashkent'
 
 USE_I18N = True
 
@@ -131,7 +135,11 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/5.2/howto/static-files/
 
-STATIC_URL = 'static/'
+STATIC_URL = '/static/'
+STATIC_ROOT = BASE_DIR.parent / "cdn/static"
+
+MEDIA_URL = "/media/"
+MEDIA_ROOT = BASE_DIR.parent / "cdn/media"
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
@@ -143,3 +151,23 @@ BOT_TOKEN = config('BOT_TOKEN')
 LIFESPAN_CONTEXT = 'config.lifespan.lifespan_context'
 BOT_WEBHOOK_PATH = 'process-bot-updates'
 BOT_SECRET_TOKEN = config('BOT_SECRET_TOKEN')
+
+BOT_WEBHOOK_SECRET = config('BOT_WEBHOOK_SECRET')
+
+CSRF_TRUSTED_ORIGINS = [
+    "http://*.localhost:1040",
+    "http://*.localhost:8003",
+    "http://95.46.96.71:1040",
+]
+
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ALL_ORIGINS = True
+
+CLICK_SERVICE_ID = config('CLICK_SERVICE_ID')
+CLICK_MERCHANT_ID = config('CLICK_MERCHANT_ID')
+CLICK_SECRET_KEY = config('CLICK_SECRET_KEY')
+CLICK_MERCHANT_USER_ID = config('CLICK_MERCHANT_USER_ID')
+
+CLICK_AMOUNT_FIELD = "amount"
+
+ADMIN_USERNAME = '@TurgunovKozimjon'

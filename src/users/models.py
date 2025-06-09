@@ -1,17 +1,18 @@
 from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin
 from django.db import models
-from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from phonenumber_field.modelfields import PhoneNumberField
 
+from core.utils.constants import CONSTANTS
 from .managers import UserManager
+from src.core.models import TimestampedModel
 
 
-class User(AbstractBaseUser, PermissionsMixin):
+class User(AbstractBaseUser, PermissionsMixin, TimestampedModel):
     telegram_id = models.BigIntegerField(unique=True, primary_key=True)
+    username = models.CharField(max_length=500)
     first_name = models.CharField(max_length=255)
     last_name = models.CharField(max_length=255, null=True, blank=True)
-    telegram_username = models.CharField(max_length=255, null=True, blank=True)
     phone = PhoneNumberField(null=True, blank=True)
     is_staff = models.BooleanField(
         _("staff status"),
@@ -26,7 +27,10 @@ class User(AbstractBaseUser, PermissionsMixin):
             "Unselect this instead of deleting accounts."
         ),
     )
-    date_joined = models.DateTimeField(_("date joined"), default=timezone.now)
+    is_subscribed = models.BooleanField(default=False)
+    subscription_start_date = models.DateTimeField(null=True, blank=True)
+    subscription_end_date = models.DateTimeField(null=True, blank=True)
+    language = models.CharField(max_length=10, choices=CONSTANTS.LANGUAGES.CHOICES, default=CONSTANTS.LANGUAGES.UZ)
 
     USERNAME_FIELD = 'telegram_id'
     objects = UserManager()
