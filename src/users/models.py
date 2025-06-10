@@ -5,7 +5,7 @@ from phonenumber_field.modelfields import PhoneNumberField
 
 from core.utils.constants import CONSTANTS
 from .managers import UserManager
-from src.core.models import TimestampedModel
+from core.models import TimestampedModel
 
 
 class User(AbstractBaseUser, PermissionsMixin, TimestampedModel):
