@@ -271,14 +271,15 @@ async def verify_payment(callback: types.CallbackQuery, state: FSMContext):
     course_id = int(callback.data.split("_")[-1])
     user_id = callback.from_user.id
     order = await Order.objects.filter(user_id=user_id, course_id=course_id).alast()
+    membership = await UserCourseSubscription.objects.filter(user_id=user_id, course_id=course_id).alast()
 
-    if not order:
+    if not membership:
         await callback.message.answer(
             "Siz hali tolov qilmagansiz. Ilitmos tolov qiling!"
         )
         return
 
-    if order.status == CONSTANTS.PaymentStatus.SUCCESS:
+    if membership.status == CONSTANTS.MembershipStatus.ACTIVE:
         private_channels = await sync_to_async(list)(PrivateChannel.objects.filter(course_id=course_id))
 
         keyboard = InlineKeyboardBuilder()
@@ -302,7 +303,7 @@ async def verify_payment(callback: types.CallbackQuery, state: FSMContext):
         )
     else:
         await callback.message.answer(
-            "Agar muammolar bo'lsa, administratorga murojaat qiling."
+            "To`lov tasdiqlanmadi, iltimos avval to`lovni amalga oshiring!"
         )
 
 
