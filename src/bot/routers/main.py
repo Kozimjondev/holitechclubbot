@@ -274,9 +274,7 @@ async def verify_payment(callback: types.CallbackQuery, state: FSMContext):
     membership = await UserCourseSubscription.objects.filter(user_id=user_id, course_id=course_id).alast()
 
     if not membership:
-        await callback.message.answer(
-            "Siz hali tolov qilmagansiz. Ilitmos tolov qiling!"
-        )
+        await callback.answer("Siz hali tolov qilmagansiz. Ilitmos to'lov qiling!", show_alert=True)
         return
 
     if membership.status == CONSTANTS.MembershipStatus.ACTIVE:
@@ -290,22 +288,26 @@ async def verify_payment(callback: types.CallbackQuery, state: FSMContext):
                 callback_data=f"join_channel_{channel.id}"
             )
 
+        keyboard.button(text='🔙 Orqaga', callback_data="back_to_courses")
         keyboard.button(text='Asosiy menyu', callback_data="main_menu")
 
         keyboard.adjust(1)
 
-        await callback.message.answer(
+        await callback.message.edit_text(
             f"Tabriklaymiz! Siz <b>{order.course.name}</b> kursiga muvaffaqiyatli a'zo bo'ldingiz.\n\n"
             "Quyidagi tugmalar orqali maxsus guruhlarga qo'shilishingiz mumkin:",
             reply_markup=keyboard.as_markup(),
-            parse_mode="HTML",
-            protect_content=True
+            parse_mode="HTML"
         )
     else:
-        await callback.message.answer(
-            "To`lov tasdiqlanmadi, iltimos avval to`lovni amalga oshiring!"
-        )
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔙 Orqaga", callback_data="back_to_courses")]
+        ])
 
+        await callback.message.edit_text(
+            "To`lov tasdiqlanmadi, iltimos avval to`lovni amalga oshiring!",
+            reply_markup=keyboard
+        )
 
 @router.callback_query(F.data.startswith("join_channel_"))
 async def join_channel(callback: types.CallbackQuery, state: FSMContext):
