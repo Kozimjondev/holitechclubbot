@@ -10,7 +10,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram import Router, types
 from aiogram.filters.command import CommandStart, Command
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from aiogram.types import ReplyKeyboardRemove
+from aiogram.types import ReplyKeyboardRemove, InlineKeyboardMarkup, InlineKeyboardButton
 from asgiref.sync import sync_to_async
 from aiogram.filters import StateFilter
 
@@ -153,7 +153,7 @@ async def cmd_courses(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.answer(text, reply_markup=keyboard.as_markup(), parse_mode="HTML")
 
 
-@router.callback_query(F.data == "subscription")
+@router.callback_query(F.data.in_(["subscription", 'back_to_courses']))
 async def cmd_subscription(callback: types.CallbackQuery, state: FSMContext):
     """Handle /subscription command"""
 
@@ -181,7 +181,7 @@ async def cmd_subscription(callback: types.CallbackQuery, state: FSMContext):
 
     keyboard.adjust(1)
 
-    await callback.message.answer(
+    await callback.message.edit_text(
         message_text,
         reply_markup=keyboard.as_markup()
     )
@@ -198,22 +198,21 @@ async def select_amount(callback: types.CallbackQuery, state: FSMContext):
 
     keyboard = InlineKeyboardBuilder()
     keyboard.button(text="💳 Click", callback_data="click_payment")
-    keyboard.button(text="✅ To'lovni tekshirish", callback_data=f"verify_payment_{course_amount.id}")
-    keyboard.button(text='Orqaga', callback_data="subscription")
-    keyboard.button(text='Asosiy menyu', callback_data="main_menu")
+    keyboard.button(text='🔙 Orqaga', callback_data="subscription")
+    keyboard.button(text='🏠︎ Asosiy menyu', callback_data="main_menu")
     keyboard.adjust(1)
 
     formatted_amount = f"{course_amount.amount:,}".replace(',', ' ')
 
     message_text = (
-        f"<b>{course_amount.name}</b>\n\n"
-        f"{course_amount.description}\n\n"
-        f"<b>Narxi:</b> {formatted_amount} so`m\n\n"
-        f"{course_amount.period} kun davom etadi\n\n"
+        f"▶ <b>Kurs</b>: {course_amount.name}\n"
+        f"📃 <b>Kurs haqida</b>: {course_amount.description}\n"
+        f"💵 <b>Narxi:</b> {formatted_amount} so`m\n"
+        f"📆 <b>Kurs davomiyligi</b>: {course_amount.period} kun davom etadi\n\n"
         "Iltimos, to'lov usulini tanlang:"
     )
 
-    await callback.message.answer(
+    await callback.message.edit_text(
         message_text,
         reply_markup=keyboard.as_markup(),
         parse_mode="HTML"
@@ -240,18 +239,28 @@ async def click_payment(callback: types.CallbackQuery, state: FSMContext):
     )
 
     base_url = "https://my.click.uz/services/pay"
+    return_url = ""
 
     paylink_url = (
-        f"{base_url}?service_id={settings.CLICK_SERVICE_ID}&merchant_id={settings.CLICK_MERCHANT_ID}"  # noqa
+        f"{base_url}?service_id={settings.CLICK_SERVICE_ID}&merchant_id={settings.CLICK_MERCHANT_ID}"
         f"&amount={course.amount}&transaction_param={order.id}"
-        f"&return_url="
+        f"&return_url={return_url}"
     )
 
-    await callback.answer(url=paylink_url)
+    await callback.answer()
 
-    await callback.message.answer(
-        "Siz to'lov tizimiga yo'naltirilmoqdasiz...\n"
-        "Agar avtomatik ravishda yo'naltirilmasangiz, iltimos administratorga murojaat qiling."
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💳 To'lovni amalga oshirish", url=paylink_url)],
+        [InlineKeyboardButton(text="✅ To'lovni tekshirish", callback_data=f"verify_payment_{course.id}")],
+        [InlineKeyboardButton(text="🔙 Orqaga", callback_data="back_to_courses")]
+    ])
+
+    await callback.message.edit_text(
+        f"💰 To'lov miqdori: {course.amount:,} so'm\n"
+        f"➡️ Kurs: {course.name}\n"
+        "💳 To'lov turi: Click\n\n"
+        f"To'lovni amalga oshirish uchun quyidagi tugmani bosing:",
+        reply_markup=keyboard
     )
 
 
