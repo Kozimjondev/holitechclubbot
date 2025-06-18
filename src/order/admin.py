@@ -19,8 +19,8 @@ class UserCourseSubscriptionAdmin(admin.ModelAdmin):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ('user', 'course', 'amount')
-    list_display_links = ('amount',)
+    list_display = ('user', 'course', 'amount', 'created_at')
+    list_display_links = ('amount', 'user')
 
 
 @admin.register(Transaction)

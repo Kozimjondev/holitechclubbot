@@ -31,8 +31,8 @@ class Transaction(TimestampedModel):
         max_length=20, choices=CONSTANTS.PaymentMethod.CHOICES
     )
     cancel_reason = models.IntegerField(null=True, blank=True)
-    perform_time = models.DateTimeField(null=True, default=0)
-    cancel_time = models.DateTimeField(null=True, default=0)
+    perform_time = models.DateTimeField(null=True, blank=True)
+    cancel_time = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.transaction_id} - {self.pk}"
