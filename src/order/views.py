@@ -257,7 +257,7 @@ class ClickWebhook(APIView):
             defaults={
                 'amount': params.amount,
                 'transaction_id': params.click_trans_id,
-                'user_id': order.user.id,
+                'user_id': order.user.telegram_id,
                 "perform_time": timezone.now(),
             }
         )
