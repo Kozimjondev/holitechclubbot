@@ -270,8 +270,8 @@ async def verify_payment(callback: types.CallbackQuery, state: FSMContext):
 
     course_id = int(callback.data.split("_")[-1])
     user_id = callback.from_user.id
-    order = await Order.objects.filter(user_id=user_id, course_id=course_id).alast()
     membership = await UserCourseSubscription.objects.filter(user_id=user_id, course_id=course_id).alast()
+    course = await Course.objects.filter(id=course_id).afirst()
 
     if not membership:
         await callback.answer("Siz hali tolov qilmagansiz. Ilitmos to'lov qiling!", show_alert=True)
@@ -294,7 +294,7 @@ async def verify_payment(callback: types.CallbackQuery, state: FSMContext):
         keyboard.adjust(1)
 
         await callback.message.edit_text(
-            f"Tabriklaymiz! Siz <b>{order.course.name}</b> kursiga muvaffaqiyatli a'zo bo'ldingiz.\n\n"
+            f"Tabriklaymiz! Siz <b>{course.name}</b> kursiga muvaffaqiyatli a'zo bo'ldingiz.\n\n"
             "Quyidagi tugmalar orqali maxsus guruhlarga qo'shilishingiz mumkin:",
             reply_markup=keyboard.as_markup(),
             parse_mode="HTML"
