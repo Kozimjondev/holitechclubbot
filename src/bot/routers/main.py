@@ -284,7 +284,7 @@ async def verify_payment(callback: types.CallbackQuery, state: FSMContext):
 
         for i, channel in enumerate(private_channels, start=1):
             keyboard.button(
-                text=f"🔔 {i} - kanal",
+                text=f"➕ Yopiq kanal",
                 callback_data=f"join_channel_{channel.id}"
             )
 
@@ -314,60 +314,34 @@ async def join_channel(callback: types.CallbackQuery, state: FSMContext):
     """Handle channel join request with verification"""
     from bot.misc import bot
 
-    # Get channel ID from callback data
     channel_id = int(callback.data.split("_")[-1])
     user_id = callback.from_user.id
 
+    channel = await PrivateChannel.objects.aget(id=channel_id)
+
     try:
-        # Get the channel info
-        channel = await PrivateChannel.objects.get(id=channel_id)
-        course_id = channel.course_id
+        invite_link = await bot.create_chat_invite_link(
+            chat_id=channel.private_channel_id,
+            name=f"User {user_id}",
+            creates_join_request=False,
+            expire_date=int(time.time() + 360),
+            member_limit=1
+        )
 
-        # Verify user has a successful payment for this course
-        order = await Order.objects.filter(
-            user_id=user_id,
-            course_id=course_id,
-            status=CONSTANTS.PaymentStatus.SUCCESS
-        ).afirst()
+        keyboard = InlineKeyboardBuilder()
+        keyboard.button(text="Guruhga kirish", url=invite_link.invite_link)
+        keyboard.adjust(1)
 
-        if order:
-            # User has paid - generate a temporary invite link or add them directly
-            try:
-                # Option 1: If bot has invite_users permission, add user directly
-                # await bot.add_chat_member(channel.chat_id, user_id)
-
-                # Option 2: Generate a one-time invite link
-                invite_link = await bot.create_chat_invite_link(
-                    chat_id=channel.chat_id,
-                    name=f"User {user_id}",
-                    creates_join_request=False,
-                    expire_date=int(time.time() + 360),
-                    member_limit=1
-                )
-
-                # Send the invite link to the user
-                keyboard = InlineKeyboardBuilder()
-                keyboard.button(text="Guruhga kirish", url=invite_link.invite_link)
-                keyboard.adjust(1)
-
-                await callback.message.answer(
-                    f"Marhamat, guruhga kirish uchun havola:\n"
-                    f"Bu havola faqat bir marta ishlatilishi mumkin va 10 daqiqa ichida amal qiladi.",
-                    reply_markup=keyboard.as_markup()
-                )
-
-            except Exception as e:
-                await callback.message.answer(
-                    f"Guruhga qo'shishda xatolik yuz berdi. Administrator bilan bog'laning."
-                )
-        else:
-            # User hasn't paid or payment not successful
-            await callback.message.answer(
-                "Siz ushbu kurs uchun to'lovni amalga oshirmagansiz yoki to'lov tasdiqlanmagan."
-            )
+        await callback.message.answer(
+            f"Marhamat, guruhga kirish uchun havola:\n"
+            f"Bu havola faqat bir marta ishlatilishi mumkin va 10 daqiqa ichida amal qiladi.",
+            reply_markup=keyboard.as_markup()
+        )
 
     except Exception as e:
-        await callback.message.answer("Xatolik yuz berdi. Iltimos qaytadan urinib ko'ring.")
+        await callback.message.answer(
+            f"Guruhga qo'shishda xatolik yuz berdi. Administrator bilan bog'laning."
+        )
 
     await callback.answer()
 
