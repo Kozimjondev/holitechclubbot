@@ -10,7 +10,7 @@ class SubscriptionService:
 
     def create_subscription(self):
         order = self.get_order()
-        order.status = order.CONSTANTS.PaymentStatus.SUCCESS
+        order.status = CONSTANTS.PaymentStatus.SUCCESS
         order.save()
 
         UserCourseSubscription.objects.create(
