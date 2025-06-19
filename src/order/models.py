@@ -139,3 +139,15 @@ class PrivateChannel(TimestampedModel):
 
     def __str__(self):
         return f"{self.course} - {self.private_channel_id}"
+
+
+class UserJoinChannel(TimestampedModel):
+    user = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name="join_channel")
+    channel = models.ForeignKey(PrivateChannel, on_delete=models.CASCADE, related_name="join_channel")
+    is_joined = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.user.telegram_id} - {self.channel}"
+
+    class Meta:
+        unique_together = ('user', 'channel')

@@ -10,18 +10,21 @@ MENU_TRANSLATIONS = {
     'uz': {
         'subscription': "💳 Obuna",
         'motivation': "🎥 Motivatsiya",
-        'support': "❓ Qo'llab-quvvatlash"
+        'support': "❓ Qo'llab-quvvatlash",
+        "subscription_period": "🗓️ Azolik muddati"
     },
     'ru': {
         'subscription': "💳 Подписка",
         'motivation': "🎥 Мотивация",
-        'support': "❓ Поддержка"
+        'support': "❓ Поддержка",
+        "subscription_period": "🗓️ Azolik muddati"
     },
     'en': {
         'subscription': "💳 Subscription",
         'motivation': "🎥 Motivation",
-        'support': "❓ Support"
-    }
+        'support': "❓ Support",
+        "subscription_period": "🗓️ Azolik muddati"
+    },
 }
 
 
@@ -52,6 +55,10 @@ def get_main_menu(language: str = 'uz'):
     builder.button(
         text=translations['support'],
         callback_data="support"
+    )
+    builder.button(
+        text=translations['subscription_period'],
+        callback_data="subscription_period"
     )
 
     builder.adjust(1)
