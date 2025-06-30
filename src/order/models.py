@@ -19,7 +19,7 @@ class Transaction(TimestampedModel):
         (CANCELED_DURING_INIT, "Canceled during initiation"),
     ]
     _id = models.CharField(max_length=255, null=True, blank=True)
-    transaction_id = models.CharField(max_length=50)
+    transaction_id = models.CharField(max_length=50, null=True, blank=True)
     order_id = models.BigIntegerField(null=True, blank=True)
     user = models.ForeignKey('users.User', on_delete=models.CASCADE, related_name='user_transactions', null=True,
                              blank=True)
@@ -28,7 +28,7 @@ class Transaction(TimestampedModel):
     state = models.IntegerField(choices=STATE, default=CREATED)
     fiscal_data = models.JSONField(default=dict)
     payment_method = models.CharField(
-        max_length=20, choices=CONSTANTS.PaymentMethod.CHOICES
+        max_length=20, choices=CONSTANTS.PaymentMethod.CHOICES, default=CONSTANTS.PaymentMethod.CLICK
     )
     cancel_reason = models.IntegerField(null=True, blank=True)
     perform_time = models.DateTimeField(null=True, blank=True)

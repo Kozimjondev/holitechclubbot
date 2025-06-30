@@ -22,7 +22,8 @@ async def set_commands(bot: Bot):
     """Set bot commands in the menu"""
     commands = [
         BotCommand(command="start", description="Botni ishga tushirish"),
-        BotCommand(command="help", description="Yordam"),
+        BotCommand(command="check", description="Obunani tekshirish"),
+        BotCommand(command="cancel", description="Obunani to'xtatish"),
     ]
 
     await bot.set_my_commands(commands, scope=BotCommandScopeDefault())

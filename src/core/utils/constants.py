@@ -16,7 +16,7 @@ class CONSTANTS:
         )
 
     class PaymentMethod:
-        CLICK = "click_up"
+        CLICK = "click"
         PAYME = "payme"
 
         CHOICES = (

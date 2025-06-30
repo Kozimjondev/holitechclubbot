@@ -1,6 +1,6 @@
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
-from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton
+from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton, InlineKeyboardMarkup
 from aiogram.enums import ParseMode
 from aiogram.utils.keyboard import ReplyKeyboardBuilder
 
@@ -31,34 +31,33 @@ MENU_TRANSLATIONS = {
 def get_main_menu(language: str = 'uz'):
     """
     Create main menu keyboard with inline buttons based on language
-
-    Args:
-        language (str): Language code ('uz', 'ru', 'en')
-
-    Returns:
-        InlineKeyboardMarkup: Keyboard markup with localized buttons
     """
-    # Get translations for the specified language, fallback to Uzbek
-    translations = MENU_TRANSLATIONS.get(language, MENU_TRANSLATIONS['uz'])
 
     builder = InlineKeyboardBuilder()
 
-    # Add buttons with localized text
+    # builder.button(
+    #     text="Kurslar ro`yhati",
+    #     callback_data="active_courses"
+    # )
+    # builder.button(
+    #     text="Mening kartalarim",
+    #     callback_data="my_cards"
+    # )
     builder.button(
-        text=translations['subscription'],
-        callback_data="subscription"
+        text="Obunani tekshirish",
+        callback_data="check_membership_info"
     )
     builder.button(
-        text=translations['motivation'],
-        callback_data="motivation"
+        text="Obunani bekor qilish",
+        callback_data="cancel_membership"
     )
+    # builder.button(
+    #     text="Karta qo'shish",
+    #     callback_data="add_card"
+    # )
     builder.button(
-        text=translations['support'],
-        callback_data="support"
-    )
-    builder.button(
-        text=translations['subscription_period'],
-        callback_data="subscription_period"
+        text="Savol berish",
+        url="https://t.me/yolda_korishamiz_support"
     )
 
     builder.adjust(1)
@@ -82,5 +81,43 @@ def get_menu_back_keyboard(user_lang=CONSTANTS.LANGUAGES.UZ):
         keyboard.button(text="🔙 Назад", callback_data="main_menu")
     else:
         keyboard.button(text="🔙 Orqaga", callback_data="main_menu")
+
+    return keyboard.as_markup()
+
+
+def back_menu_button():
+    return InlineKeyboardButton(text="🔙 Orqaga", callback_data="main_menu")
+
+
+def get_mini_menu_keyboard() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="Yopiq kanalga to'lov qilish",
+                callback_data="subscribe_private_channel"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="Yopiq kanal haqida ma'lumot",
+                callback_data="subscription_info"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="Savol berish",
+                url='https://t.me/yolda_korishamiz_support'
+            )
+        ]
+    ])
+
+
+def get_mini_back_keyboard(user_lang=CONSTANTS.LANGUAGES.UZ):
+    keyboard = InlineKeyboardBuilder()
+
+    if user_lang == CONSTANTS.LANGUAGES.RU:
+        keyboard.button(text="🔙 Назад", callback_data="mini_menu")
+    else:
+        keyboard.button(text="🔙 Orqaga", callback_data="mini_menu")
 
     return keyboard.as_markup()

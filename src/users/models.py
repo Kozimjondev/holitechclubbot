@@ -28,12 +28,41 @@ class User(AbstractBaseUser, PermissionsMixin, TimestampedModel):
         ),
     )
     is_subscribed = models.BooleanField(default=False)
-    subscription_start_date = models.DateTimeField(null=True, blank=True)
-    subscription_end_date = models.DateTimeField(null=True, blank=True)
+    subscription_start_date = models.DateField(null=True, blank=True)
+    subscription_end_date = models.DateField(null=True, blank=True)
     language = models.CharField(max_length=10, choices=CONSTANTS.LANGUAGES.CHOICES, default=CONSTANTS.LANGUAGES.UZ)
+    agreed_to_terms = models.BooleanField(
+        default=False,
+        help_text="Foydalanuvchi ommaviy oferta shartlariga roziligini bildiradi."
+    )
+    is_auto_subscribe = models.BooleanField(default=False)
 
     USERNAME_FIELD = 'telegram_id'
     objects = UserManager()
 
     def __str__(self):
         return f"{self.first_name} - {self.telegram_id}"
+
+
+class UserCard(TimestampedModel):
+    class ProcessingType(models.TextChoices):
+        HUMO = "humo", _("Humo")
+        UZCARD = "uzcard", _("UZCARD")
+        VISA = "visa", _("Visa")
+
+    class ServiceType(models.TextChoices):
+        CLICK = "click", _("Click")
+
+    name = models.CharField(default="", max_length=20, verbose_name=_("name"))
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    marked_pan = models.CharField(max_length=16, null=True, blank=True)
+    expire_date = models.CharField(max_length=4)
+    service = models.CharField(max_length=25, choices=ServiceType.choices, default=ServiceType.CLICK)
+    is_main = models.BooleanField(default=False, verbose_name=_("main"))
+
+    is_confirmed = models.BooleanField(default=False)
+    card_token = models.CharField(max_length=255, verbose_name='given by click')
+    processing = models.CharField(max_length=255, null=True)
+
+    class Meta:
+        unique_together = ('user', 'marked_pan', 'card_token')
