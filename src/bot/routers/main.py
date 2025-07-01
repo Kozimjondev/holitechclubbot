@@ -2,6 +2,7 @@ import datetime
 import time
 from datetime import timedelta
 
+import aiohttp
 import requests
 from aiogram import F
 from aiogram import Router, types
@@ -312,9 +313,10 @@ async def handle_make_payment(callback: types.CallbackQuery, state: FSMContext):
         "amount": float(course.amount),
         "transaction_parameter": str(order.id)
     }
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, headers=headers, json=payload) as response:
+            res_json = await response.json()
 
-    response = requests.post(url, headers=headers, json=payload)
-    res_json = response.json()
     print(res_json)
     if res_json.get("error_code") == -5017:
         order.status = CONSTANTS.PaymentStatus.FAILED
