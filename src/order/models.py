@@ -107,6 +107,7 @@ class Order(TimestampedModel):
     course = models.ForeignKey('Course', on_delete=models.CASCADE, related_name='order_payments',)
     amount = models.PositiveIntegerField()
     status = models.CharField(max_length=20, choices=CONSTANTS.PaymentStatus.CHOICES, default=CONSTANTS.PaymentStatus.PENDING)
+    payment_id = models.BigIntegerField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.pk}"

@@ -292,9 +292,10 @@ async def handle_make_payment(callback: types.CallbackQuery, state: FSMContext):
         await callback.message.edit_text("❌ Karta topilmadi yoki tasdiqlanmagan.", reply_markup=get_main_menu_keyboard())
         return
 
-    transaction = await Transaction.objects.acreate(
+    order = await Order.objects.acreate(
         user=user,
         amount=course.amount,
+        course=course
     )
 
     url = 'https://api.click.uz/v2/merchant/card_token/payment'
@@ -309,32 +310,28 @@ async def handle_make_payment(callback: types.CallbackQuery, state: FSMContext):
         "service_id": int(settings.CLICK_SERVICE_ID),
         "card_token": str(card.card_token),
         "amount": float(course.amount),
-        "transaction_parameter": str(transaction.id)
+        "transaction_parameter": str(order.id)
     }
 
     response = requests.post(url, headers=headers, json=payload)
     res_json = response.json()
     print(res_json)
     if res_json.get("error_code") == -5017:
-        transaction.state = Transaction.CANCELED_DURING_INIT
-        transaction.transaction_id = res_json.get("payment_id")
-        await transaction.asave()
+        order.status = CONSTANTS.PaymentStatus.FAILED
+        order.payment_id = res_json.get("payment_id")
+        await order.asave()
         await callback.message.edit_text(
             "Kartada mablag` yetarli emas. Hisobingizdagi mablag'ni to'ldiring va qayta urinib koring", reply_markup=get_main_menu_keyboard()
         )
         return
     elif res_json.get("error_code"):
-        transaction.state = Transaction.CANCELED_DURING_INIT
-        transaction.transaction_id = res_json.get("payment_id")
-        await transaction.asave()
+        order.state = Transaction.CANCELED_DURING_INIT
+        order.payment_id = res_json.get("payment_id")
+        await order.asave()
         await callback.message.edit_text(
             "To'lov amalga oshmadi. Qaytadan urinib koring", reply_markup=get_main_menu_keyboard()
         )
         return
-
-    transaction.state = Transaction.SUCCESSFULLY
-    transaction.transaction_id = res_json.get("payment_id")
-    await transaction.asave()
 
     if not user.is_subscribed:
         user.subscription_start_date = timezone.now().date()
