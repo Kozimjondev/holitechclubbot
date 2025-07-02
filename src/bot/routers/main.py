@@ -65,6 +65,104 @@ async def cmd_start(message: types.Message, state: FSMContext):
         await message.answer(message_text, reply_markup=get_mini_menu_keyboard())
 
 
+@router.message(Command('check'))
+async def cmd_check(message: types.Message, state: FSMContext):
+    telegram_id = message.from_user.id
+    user = await User.objects.filter(telegram_id=telegram_id).afirst()
+    if not user:
+        await state.set_state(UserStates.name)
+        await message.answer('Ismingizni kiriting:')
+    else:
+        today = datetime.date.today()
+
+        if user.is_subscribed and user.is_auto_subscribe:
+            period = (user.subscription_end_date - today).days
+            text = (
+                f"Sizning a'zoligingiz tugashiga {period} kun qoldi.\n"
+                f"Obuna tugash sanasi: {user.subscription_end_date.strftime('%Y-%m-%d')}\n\n"
+                f"Obuna tugash sanasida kartangizdan avtomat yechib olinadi!"
+            )
+            await message.answer(text, parse_mode="Markdown", reply_markup=get_menu_back_keyboard())
+            return
+        elif user.is_subscribed and not user.is_auto_subscribe:
+            period = (user.subscription_end_date - today).days
+            text = (
+                f"Sizning a'zoligingiz tugashiga {period} kun qoldi.\n"
+                f"Obuna tugash sanasi: {user.subscription_end_date.strftime('%Y-%m-%d')}\n\n"
+                f"Siz obuna bo'lishni bekor qilgansiz. Obuna tugaganidan so'ng yopiq kanaldan chiqarib yuborilasiz!"
+            )
+            await message.answer(text, parse_mode="Markdown", reply_markup=get_menu_back_keyboard())
+            return
+
+        text = "Siz Obuna sotib olmagansiz, Sotib olish uchun pastdagi tugmani bosing:"
+
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(
+                text=f"Obuna sotib olish",
+                callback_data="mini_menu",
+            )],
+            [back_menu_button()]
+        ])
+
+        await message.answer(text, parse_mode="Markdown", reply_markup=keyboard)
+
+
+
+@router.message(Command("cancel"))
+async def cmd_cancel(message: types.Message, state: FSMContext):
+    telegram_id = message.from_user.id
+    user = await User.objects.aget(telegram_id=telegram_id)
+
+    if not user:
+        await state.set_state(UserStates.name)
+        await message.answer('Ismingizni kiriting:')
+        return
+
+    today = datetime.date.today()
+
+    subscription_end = user.subscription_end_date
+    period = (subscription_end - today).days if subscription_end else None
+
+    if user.is_subscribed and user.is_auto_subscribe:
+
+        text = (
+            f"⚠️ Obunani bekor qilishga ishonchingiz komilmi?\n\n"
+            f"Obunani bekor qilmoqchi bo'lsangiz {user.subscription_end_date.strftime('%Y-%m-%d')} sanadan yopiq kanaldan chiqarib yuborilasiz.\n"
+            f"Botga ulangan kartangiz ham o`chirib yuboriladi.\n"
+            f"Obunani bekor qilasizmi?"
+        )
+        builder = InlineKeyboardBuilder()
+        builder.button(text="Ha", callback_data="confirm_cancel_membership")
+        builder.button(text='🔙 Orqaga', callback_data="main_menu")
+        builder.adjust(1)
+
+        await message.answer(text, reply_markup=builder.as_markup())
+        return
+
+    elif user.is_subscribed and not user.is_auto_subscribe:
+        text = (
+            f"Sizning a'zoligingiz tugashiga {period} kun qoldi.\n"
+            f"Obuna tugash sanasi: {user.subscription_end_date.strftime('%Y-%m-%d')}\n\n"
+            "🔴 Obunani bekor qilgansiz."
+        )
+        builder = InlineKeyboardBuilder()
+        builder.button(text='🔙 Orqaga', callback_data="main_menu")
+        builder.adjust(1)
+
+        await message.answer(text, parse_mode="Markdown", reply_markup=builder.as_markup())
+        return
+
+    elif not user.is_subscribed and not user.is_auto_subscribe:
+        text = (
+            "Sizda aktiv obuna yoq"
+        )
+        builder = InlineKeyboardBuilder()
+        builder.button(text='🔙 Orqaga', callback_data="main_menu")
+        builder.adjust(1)
+        await message.answer(text, parse_mode="Markdown", reply_markup=builder.as_markup())
+        return
+
+
 @router.message(UserStates.name)
 async def handle_user_name(message: types.Message, state: FSMContext):
     name = message.text
