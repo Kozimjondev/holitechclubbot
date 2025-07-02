@@ -75,5 +75,6 @@ class CourseAmountAdmin(admin.ModelAdmin):
 @admin.register(PrivateChannel)
 class PrivateChannelAdmin(admin.ModelAdmin):
     list_display = ('id', 'private_channel_id', 'course', 'private_channel_link',)
+    list_display_links = ('id', 'private_channel_id')
     search_fields = ('private_channel_id', 'private_channel_link')
     ordering = ('-created_at',)

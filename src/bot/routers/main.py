@@ -3,7 +3,6 @@ import time
 from datetime import timedelta
 
 import aiohttp
-import requests
 from aiogram import F
 from aiogram import Router, types
 from aiogram.filters import StateFilter
@@ -58,7 +57,11 @@ async def cmd_start(message: types.Message, state: FSMContext):
         await state.set_state(UserStates.name)
         await message.answer('Ismingizni kiriting:')
     else:
-        message_text = "Asosiy menyu:"
+        if user.is_subscribed and user.subscription_end_date is not None:
+            message_text = "Asosiy menyu:"
+            await message.answer(message_text, reply_markup=get_main_menu())
+            return
+        message_text = "Menyu:"
         await message.answer(message_text, reply_markup=get_mini_menu_keyboard())
 
 
@@ -327,13 +330,17 @@ async def handle_make_payment(callback: types.CallbackQuery, state: FSMContext):
         )
         return
     elif res_json.get("error_code"):
-        order.state = Transaction.CANCELED_DURING_INIT
+        order.status = CONSTANTS.PaymentStatus.FAILED
         order.payment_id = res_json.get("payment_id")
         await order.asave()
         await callback.message.edit_text(
             "To'lov amalga oshmadi. Qaytadan urinib koring", reply_markup=get_main_menu_keyboard()
         )
         return
+
+    order.status = CONSTANTS.PaymentStatus.SUCCESS
+    order.payment_id = res_json.get("payment_id")
+    await order.asave()
 
     if not user.is_subscribed:
         user.subscription_start_date = timezone.now().date()
@@ -433,10 +440,17 @@ async def handle_card_pan(message: types.Message, state: FSMContext):
         "expire_date": str(card_pan),
         "temporary": 0
     }
+    headers = {
+        'Content-Type': 'application/json',
+        "Accept": "application/json"
+    }
 
     url = 'https://api.click.uz/v2/merchant/card_token/request'
-    response = requests.post(url, json=payload, headers={'Content-Type': 'application/json', "Accept": "application/json"})
-    res_json = response.json()
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, headers=headers, json=payload) as response:
+            res_json = await response.json()
+
     print(res_json)
     if res_json.get('error_code'):
         await state.clear()
@@ -492,8 +506,9 @@ async def handle_confirmation(message: types.Message, state: FSMContext):
         "sms_code": int(sms_code),
     }
 
-    response = requests.post(url, headers=headers, json=payload)
-    res_json = response.json()
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, headers=headers, json=payload) as response:
+            res_json = await response.json()
 
     if res_json.get('error_code'):
         await state.clear()
@@ -509,7 +524,7 @@ async def handle_confirmation(message: types.Message, state: FSMContext):
     the_last_created_card.marked_pan = res_json.get('card_number')
     the_last_created_card.is_confirmed = True
     await the_last_created_card.asave()
-
+    await state.clear()
     await message.answer(
         "Karta muvaffaqiyatli qoshildi. Kurslar royxatiga o`tib kerakli kursga tolov qiling:",
         reply_markup=InlineKeyboardMarkup(inline_keyboard=[
@@ -662,8 +677,10 @@ async def handle_confirm_cancel_membership(callback: types.CallbackQuery, state:
 
     url = f'https://api.click.uz/v2/merchant/card_token/{payload['service_id']}/{payload["card_token"]}'
 
-    response = requests.delete(url, headers=headers)
-    res_json = response.json()
+    async with aiohttp.ClientSession() as session:
+        async with session.post(url, headers=headers, json=payload) as response:
+            res_json = await response.json()
+
     print(res_json)
     await user_card.adelete()
     await callback.message.edit_text("Obuna o`chirildi.", reply_markup=builder.as_markup())
@@ -875,141 +892,6 @@ async def click_payment(callback: types.CallbackQuery, state: FSMContext):
     )
 
 
-@router.callback_query(F.data.startswith("verify_payment_"))
-async def verify_payment(callback: types.CallbackQuery, state: FSMContext):
-    """Verify payment and provide access to private group"""
-
-    course_id = int(callback.data.split("_")[-1])
-    user_id = callback.from_user.id
-    membership = await UserCourseSubscription.objects.filter(user_id=user_id, course_id=course_id).alast()
-    course = await Course.objects.filter(id=course_id).afirst()
-
-    if not membership:
-        await callback.answer("Siz hali tolov qilmagansiz. Ilitmos to'lov qiling!", show_alert=True)
-        return
-
-    if membership.status == CONSTANTS.MembershipStatus.ACTIVE:
-        private_channels = await sync_to_async(list)(PrivateChannel.objects.filter(course_id=course_id))
-        keyboard = InlineKeyboardBuilder()
-
-        # Build keyboard buttons
-        for i, channel in enumerate(private_channels, start=1):
-            # Get user object
-            user = await User.objects.aget(telegram_id=user_id)
-
-            # Check if user has already joined this channel
-            user_join_channel = await UserJoinChannel.objects.filter(
-                user=user, channel=channel
-            ).afirst()
-
-            # Only show join button if user hasn't joined yet
-            if not user_join_channel or not user_join_channel.is_joined:
-                keyboard.button(
-                    text=f"➕ Yopiq kanal",
-                    callback_data=f"join_channel_{channel.id}"
-                )
-
-        keyboard.button(text='🔙 Orqaga', callback_data="back_to_courses")
-        keyboard.button(text='Asosiy menyu', callback_data="main_menu")
-
-        keyboard.adjust(1)
-
-        # Count channels available to join
-        channels_to_join = 0
-        for i, channel in enumerate(private_channels, start=1):
-            # Get user object
-            user = await User.objects.aget(telegram_id=user_id)
-
-            # Check if user has already joined this channel
-            user_join_channel = await UserJoinChannel.objects.filter(
-                user=user, channel=channel
-            ).afirst()
-
-            if not user_join_channel or not user_join_channel.is_joined:
-                channels_to_join += 1
-
-        if channels_to_join > 0:
-            message_text = (
-                f"Tabriklaymiz! Siz <b>{course.name}</b> kursiga muvaffaqiyatli a'zo bo'ldingiz.\n\n"
-                "Quyidagi tugmalar orqali maxsus guruhlarga qo'shilishingiz mumkin:"
-            )
-        else:
-            message_text = (
-                f"Tabriklaymiz! Siz <b>{course.name}</b> kursiga muvaffaqiyatli a'zo bo'ldingiz.\n\n"
-                "Siz barcha maxsus guruhlarga allaqachon qo'shilgansiz!"
-            )
-
-        await callback.message.edit_text(
-            message_text,
-            reply_markup=keyboard.as_markup(),
-            parse_mode="HTML"
-        )
-    else:
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text="🔙 Orqaga", callback_data="back_to_courses")]
-        ])
-
-        await callback.message.edit_text(
-            "To`lov tasdiqlanmadi, iltimos avval to`lovni amalga oshiring!",
-            reply_markup=keyboard
-        )
-
-
-@router.callback_query(F.data.startswith("join_channel_"))
-async def join_channel(callback: types.CallbackQuery, state: FSMContext):
-    """Handle channel join request with verification"""
-    from bot.misc import bot
-
-    channel_id = int(callback.data.split("_")[-1])
-    user_id = callback.from_user.id
-
-    channel = await PrivateChannel.objects.aget(id=channel_id)
-
-    membership = await UserCourseSubscription.objects.filter(
-        user_id=user_id,
-        course_id=channel.course_id,
-        status=CONSTANTS.MembershipStatus.ACTIVE
-    ).afirst()
-
-    if not membership:
-        await callback.answer("Sizda bu guruhga kirish uchun faol obuna mavjud emas!", show_alert=True)
-        return
-
-    try:
-        chat_member = await bot.get_chat_member(channel.private_channel_id, user_id)
-
-        if chat_member.status in ("member", "administrator", "creator"):
-            await callback.answer("Siz allaqachon guruhga a'zosiz ✅", show_alert=True)
-            return
-    except Exception as e:
-        pass
-
-    invite_link = await bot.create_chat_invite_link(
-        chat_id=channel.private_channel_id,
-        name=f"User {user_id}",
-        creates_join_request=False,
-        expire_date=int(time.time() + 360),  # 6 minutes
-        member_limit=1
-    )
-
-    keyboard = InlineKeyboardBuilder()
-    keyboard.button(text="🚀 Guruhga kirish", url=invite_link.invite_link)
-    keyboard.button(text="🔙 Orqaga", callback_data=f"verify_payment_{channel.course_id}")
-    keyboard.adjust(1)
-
-    await callback.message.edit_text(
-        "Marhamat, guruhga kirish uchun havola:\n\n"
-        f"📋 <b>Muhim ma'lumotlar:</b>\n"
-        f"• Bu havola faqat <b>bir marta</b> ishlatilishi mumkin\n"
-        f"• Havola <b>6 daqiqa</b> ichida amal qiladi\n"
-        f"👆 Yuqoridagi tugma orqali guruhga kiring:",
-        reply_markup=keyboard.as_markup(),
-        parse_mode="HTML"
-    )
-
-    await callback.answer()
-
-
 @router.callback_query(F.data.in_(["motivation"]))
 async def handle_motivation(callback: types.CallbackQuery, state: FSMContext):
     """Process inline keyboard button presses"""
@@ -1176,181 +1058,6 @@ async def receive_motivation_text(message: types.Message, state: FSMContext):
         result_text = f"✅ Matn yuborildi!\n\nMuvaffaqiyatli: {sent_count}\nXatolik: {failed_count}"
 
     await message.answer(result_text, reply_markup=get_main_menu(user_lang))
-
-
-@router.message(Command('help'))
-async def on_help_command(message: types.Message):
-    help_text = """
-🤖 **Bot haqida ma'lumot**
-
-Bu bot orqali siz kanal uchun obuna xizmatlarini sotib olishingiz mumkin.
-
-📋 **Asosiy funksiyalar:**
-- Oylik obuna sotib olish
-- Motivatsion materiallar ko'rish
-- Texnik yordam olish
-
-💳 **To'lov:**
-- Click to'lov tizimi orqali
-- Xavfsiz va tez to'lov jarayoni
-
-📱 **Foydalanish:**
-1. /start tugmasini bosing
-2. Obuna tugmasini bosing
-3. To'lovni amalga oshiring
-4. Kanalga kirish linkini oling
-
-🆘 **Yordam kerakmi?**
-Savollaringiz bo'lsa, "Texnik yordam" bo'limiga murojaat qiling yoki @admin bilan bog'laning.
-
-📞 **Aloqa:**
-- Telegram: @your_support_username
-- Email: support@example.com
-
-⚡ Bot 24/7 ishlaydi va tezkor xizmat ko'rsatadi!
-    """
-
-    await message.answer(help_text, parse_mode="Markdown")
-
-def get_course_days_keyboard():
-    """Generate static keyboard with 10 course days"""
-    keyboard = InlineKeyboardBuilder()
-
-    # Add buttons for days 1-10
-    for day in range(1, 11):
-        keyboard.button(
-            text=f"📚 Kun {day}",
-            callback_data=f"course_day_{day}"
-        )
-
-    # Add back button to main menu
-    keyboard.button(text="Asosiy menyu", callback_data="main_menu")
-
-    # Adjust to 1 button per row
-    keyboard.adjust(1)
-
-    return keyboard.as_markup()
-
-
-@router.callback_query(F.data == "courses")
-async def show_course_catalog(callback: types.CallbackQuery, state: FSMContext):
-    """Show course catalog with static days 1-10"""
-    try:
-        # Delete previous message
-        await callback.message.delete()
-    except Exception:
-        pass
-
-    # Get keyboard with static course days
-    keyboard = get_course_days_keyboard()
-
-    message_text = (
-        "📚 <b>Kurs kunlari</b>\n\n"
-        "O'rganmoqchi bo'lgan kunni tanlang:"
-    )
-
-    await callback.message.answer(message_text, reply_markup=keyboard, parse_mode="HTML")
-
-
-@router.callback_query(F.data.startswith("course_day_"))
-async def show_course_day(callback: types.CallbackQuery, state: FSMContext):
-    """Show content for specific course day"""
-    try:
-        # Extract day number from callback data
-        day_number = int(callback.data.split("_")[2])
-
-        # Hashtag to search for
-        hashtag = f"#day-{day_number}"
-
-        # Build keyboard for navigation
-        keyboard = InlineKeyboardBuilder()
-        keyboard.button(text="⬅️ Orqaga", callback_data="courses")
-        # keyboard.button(text="Asosiy menyu", callback_data="main_menu")
-        keyboard.adjust(1)
-
-        # Send initial message while searching
-        await callback.message.edit_text(
-            f"📚 **Kun {day_number}** materiallari yuklanmoqda...",
-            parse_mode="HTML"
-        )
-
-        course_videos = {
-            1: 3,
-            2: 20,
-        }
-
-        if day_number in course_videos:
-            try:
-                await callback.bot.copy_message(
-                    chat_id=callback.from_user.id,
-                    from_chat_id=COURSE_CHANNEL_ID,
-                    message_id=course_videos[day_number],
-                    reply_markup=keyboard.as_markup()
-                )
-                # await callback.message.delete()
-                return
-            except Exception as msg_error:
-                print(f"Error copying message: {msg_error}")
-                # Continue to backup approach
-
-        # OPTION 2: Alternative approach - store videos in a database
-        # Pseudocode:
-        # video = await CourseVideos.objects.filter(day=day_number).afirst()
-        # if video:
-        #     await callback.bot.send_video(
-        #         chat_id=callback.from_user.id,
-        #         video=video.file_id,
-        #         caption=video.caption,
-        #         reply_markup=keyboard.as_markup()
-        #     )
-        #     await callback.message.delete()
-        #     return
-
-        # If we got here, no video was found
-        await callback.message.edit_text(
-            f"📚 **Kun {day_number}**\n\n"
-            f"Afsuski, ushbu kun uchun video topilmadi. "
-            f"Administratorga murojaat qiling.",
-            parse_mode="HTML",
-            reply_markup=keyboard.as_markup()
-        )
-
-    except Exception as e:
-        # Handle errors
-        print(f"Error fetching course video: {e}")
-        await callback.message.edit_text(
-            f"📚 **Kun {day_number}**\n\n"
-            f"Xatolik yuz berdi: {str(e)}\n"
-            f"Iltimos, keyinroq qayta urinib ko'ring.",
-            parse_mode="HTML",
-            reply_markup=keyboard.as_markup()
-        )
-
-
-@router.callback_query(F.data == "subscription_period")
-async def get_subscription_period(callback: types.CallbackQuery, state: FSMContext):
-    user_id = callback.from_user.id
-
-    membership = await UserCourseSubscription.objects.filter(
-        user_id=user_id,
-        status=CONSTANTS.MembershipStatus.ACTIVE
-    ).alast()
-
-    if not membership:
-        text = "Siz Obuna sotib olmagansiz. Asosiy menyuga o‘tib Obuna sotib oling."
-        await callback.message.edit_text(text, reply_markup=get_back_keyboard())
-        return
-
-    today = datetime.date.today()
-
-    difference = (membership.end_date - today).days
-
-    text = (
-        f"🕒 Sizning a'zoligingiz muddati: {difference} kun qoldi.\n"
-        f"📅 Tugash sanasi: {membership.end_date.strftime('%Y-%m-%d')}"
-    )
-
-    await callback.message.edit_text(text, reply_markup=get_back_keyboard())
 
 
 # Catch any other callbacks not specified above

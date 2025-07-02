@@ -19,6 +19,7 @@ from django.urls import path, include
 
 from config import settings
 from django.contrib.staticfiles.urls import static
+from core.queue.scheduler import remove_user_from_channels_sync, kick_unpaid_users_handler_sync, scheduler
 
 
 urlpatterns = [
@@ -31,3 +32,19 @@ if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
     urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)
 
+
+# if settings.RUN_SCHEDULER:
+#     scheduler.add_job(
+#         remove_user_from_channels_sync,
+#         trigger='cron',
+#         hour=22,
+#         minute=30,
+#         id='first_payment_attempt'
+#     )
+#     scheduler.add_job(
+#         kick_unpaid_users_handler_sync,
+#         trigger='cron',
+#         hour=23,
+#         minute=30,
+#         id='second_payment_attempt_and_kick'
+#     )

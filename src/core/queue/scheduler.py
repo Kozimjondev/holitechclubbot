@@ -1,16 +1,19 @@
 import asyncio
 import logging
 import os
+import time
 from datetime import date, timedelta
 from apscheduler.schedulers.background import BackgroundScheduler
 from django.utils import timezone
 from django.conf import settings
 import aiohttp
 
-from order.models import Transaction, Course, PrivateChannel
+from bot.functions import generate_auth_header
+from order.models import Course, PrivateChannel, Order
 from users.models import User, UserCard
 
 scheduler = BackgroundScheduler(timezone=settings.TIME_ZONE)
+# scheduler.start()
 
 logger = logging.getLogger(__name__)
 
@@ -19,9 +22,10 @@ from bot.misc import bot
 
 async def process_auto_payment(user, course, user_card):
     """Process automatic payment for a user"""
-    transaction = await Transaction.objects.acreate(
+    order = await Order.objects.acreate(
         user=user,
         amount=course.amount,
+        course=course,
     )
 
     url = 'https://api.click.uz/v2/merchant/card_token/payment'
@@ -34,11 +38,10 @@ async def process_auto_payment(user, course, user_card):
         "service_id": int(settings.CLICK_SERVICE_ID),
         "card_token": str(user_card.card_token),
         "amount": float(course.amount),
-        "transaction_parameter": str(transaction.id)
+        "transaction_parameter": str(order.id)
     }
 
     try:
-        # Use aiohttp for async HTTP requests
         async with aiohttp.ClientSession() as session:
             async with session.post(url, headers=headers, json=payload) as response:
                 res_json = await response.json()
@@ -47,21 +50,14 @@ async def process_auto_payment(user, course, user_card):
         payment_id = res_json.get("payment_id")
 
         if error_code == -5017:  # Insufficient funds
-            transaction.state = Transaction.CANCELED_DURING_INIT
-            transaction.transaction_id = payment_id
-            await transaction.asave()
+            order.payment_id = payment_id
+            await order.asave()
             return False, "insufficient_funds"
 
         elif error_code and error_code != 0:  # Other errors
-            transaction.state = Transaction.CANCELED_DURING_INIT
-            transaction.transaction_id = payment_id
-            await transaction.asave()
+            order.payment_id = payment_id
+            await order.asave()
             return False, "payment_error"
-
-        # Payment successful
-        transaction.state = Transaction.SUCCESSFULLY
-        transaction.transaction_id = payment_id
-        await transaction.asave()
 
         # Update user subscription
         user.subscription_end_date = timezone.now().date() + timedelta(days=course.period)
@@ -75,8 +71,6 @@ async def process_auto_payment(user, course, user_card):
 
     except Exception as e:
         logger.error(f"Payment processing failed for user {user.telegram_id}: {e}")
-        transaction.state = Transaction.CANCELED_DURING_INIT
-        await transaction.asave()
         return False, "network_error"
 
 
@@ -86,6 +80,8 @@ async def remove_user_from_channels():
     If payment fails, send warning message about retry in 1 hour
     """
     try:
+        until_date = int(time.time()) + 60
+
         course = await Course.objects.afirst()
         private_channel = await PrivateChannel.objects.filter(course_id=course.id).afirst()
 
@@ -95,6 +91,8 @@ async def remove_user_from_channels():
 
         today = date.today()
         expired_users = User.objects.filter(is_subscribed=True, subscription_end_date=today)
+        if not await expired_users.aexists():
+            return
 
         processed_count = 0
         async for user in expired_users:
@@ -107,18 +105,18 @@ async def remove_user_from_channels():
                         telegram_id,
                         "Sizning obunangiz tugaganligi uchun yopiq kanaldan chiqarildingiz!"
                     )
+
                     await bot.ban_chat_member(
                         chat_id=private_channel.private_channel_id,
                         user_id=telegram_id,
-                        until_date=120
+                        until_date=until_date
                     )
-                    # Mark as unsubscribed
+
                     user.is_subscribed = False
                     await user.asave()
                     logger.info(f"Removed non-auto-subscribe user {telegram_id}")
 
                 else:
-                    # Users with auto-subscribe: try payment
                     user_card = await UserCard.objects.filter(user_id=telegram_id).afirst()
 
                     if not user_card:
@@ -129,7 +127,8 @@ async def remove_user_from_channels():
                         )
                         await bot.ban_chat_member(
                             chat_id=private_channel.private_channel_id,
-                            user_id=telegram_id
+                            user_id=telegram_id,
+                            until_date=until_date
                         )
                         user.is_subscribed = False
                         await user.asave()
@@ -185,6 +184,8 @@ async def kick_unpaid_users_handler():
     If payment still fails, kick them from channel
     """
     try:
+        until_date = int(time.time()) + 60
+
         course = await Course.objects.afirst()
         private_channel = await PrivateChannel.objects.filter(course_id=course.id).afirst()
 
@@ -196,6 +197,8 @@ async def kick_unpaid_users_handler():
         # Find users whose subscription expired today and are still subscribed
         # (these are users from the first attempt who failed payment)
         expired_users = User.objects.filter(is_subscribed=True, subscription_end_date=today)
+        if not await expired_users.aexists():
+            return
 
         processed_count = 0
         async for user in expired_users:
@@ -214,7 +217,8 @@ async def kick_unpaid_users_handler():
                         )
                         await bot.ban_chat_member(
                             chat_id=private_channel.private_channel_id,
-                            user_id=telegram_id
+                            user_id=telegram_id,
+                            until_date=until_date
                         )
                         user.is_subscribed = False
                         await user.asave()
@@ -239,7 +243,8 @@ async def kick_unpaid_users_handler():
                             await bot.send_message(telegram_id, message)
                             await bot.ban_chat_member(
                                 chat_id=private_channel.private_channel_id,
-                                user_id=telegram_id
+                                user_id=telegram_id,
+                                until_date=until_date
                             )
                             user.is_subscribed = False
                             await user.asave()
@@ -267,29 +272,26 @@ def kick_unpaid_users_handler_sync():
 
 def setup_scheduler():
     """Setup and start the scheduler with jobs - only run once per application"""
-    # Check if we should start the scheduler
-    # This prevents multiple scheduler instances in multi-worker setups
-    if os.environ.get('RUN_SCHEDULER', '').lower() in ('true', '1', 'yes'):
+    print(settings.RUN_SCHEDULER)
+    if settings.RUN_SCHEDULER:
+        print("1......")
         try:
-            # First attempt: Try payment, send warning if fails (22:30)
             scheduler.add_job(
-                remove_user_from_channels_sync,  # Use sync wrapper
+                remove_user_from_channels_sync,
                 trigger='cron',
                 hour=22,
                 minute=30,
                 id='first_payment_attempt'
             )
 
-            # Second attempt: Retry payment, kick if fails again (23:30)
             scheduler.add_job(
-                kick_unpaid_users_handler_sync,  # Use sync wrapper
+                kick_unpaid_users_handler_sync,
                 trigger='cron',
                 hour=23,
                 minute=30,
                 id='second_payment_attempt_and_kick'
             )
 
-            # Start scheduler
             scheduler.start()
             logger.info("Scheduler started successfully with two-stage payment system")
 
@@ -309,11 +311,4 @@ def shutdown_scheduler():
         logger.error(f"Error shutting down scheduler: {e}")
 
 
-def generate_auth_header():
-    """Generate authentication header for Click API"""
-    # Your implementation here
-    pass
-
-
-# Only setup scheduler if explicitly enabled
 setup_scheduler()

@@ -116,8 +116,12 @@ def get_mini_back_keyboard(user_lang=CONSTANTS.LANGUAGES.UZ):
     keyboard = InlineKeyboardBuilder()
 
     if user_lang == CONSTANTS.LANGUAGES.RU:
+        keyboard.button(text="Оплата закрытого канала", callback_data='subscribe_private_channel')
         keyboard.button(text="🔙 Назад", callback_data="mini_menu")
+        keyboard.adjust(1)
     else:
+        keyboard.button(text="Yopiq kanalga to'lov qilish", callback_data='subscribe_private_channel')
         keyboard.button(text="🔙 Orqaga", callback_data="mini_menu")
+        keyboard.adjust(1)
 
     return keyboard.as_markup()
