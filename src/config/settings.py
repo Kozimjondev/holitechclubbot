@@ -175,7 +175,7 @@ CLICK_AMOUNT_FIELD = "amount"
 
 ADMIN_USERNAME = '@TurgunovKozimjon'
 
-OFERTA_URL = 'https://docs.google.com/spreadsheets/d/1AT2dOBOQjUb8QBdBZfxcgpSpsdNj5xRZ/edit?gid=306014876#gid=306014876'
+OFERTA_URL = 'https://docs.google.com/document/d/1C-r5x3UCDvtMDa5TktbYFEtJJ0-jaMX0PzKKa-sfY3A/edit?tab=t.0'
 
 RUN_SCHEDULER = config('RUN_SCHEDULER', default=False, cast=bool)
 print(RUN_SCHEDULER)
