@@ -36,6 +36,7 @@ class User(AbstractBaseUser, PermissionsMixin, TimestampedModel):
         help_text="Foydalanuvchi ommaviy oferta shartlariga roziligini bildiradi."
     )
     is_auto_subscribe = models.BooleanField(default=False)
+    is_foreigner = models.BooleanField(default=False)
 
     USERNAME_FIELD = 'telegram_id'
     objects = UserManager()

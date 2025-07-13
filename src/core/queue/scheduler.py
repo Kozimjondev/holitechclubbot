@@ -28,7 +28,7 @@ async def process_auto_payment(user, course, user_card):
         course=course,
     )
 
-    url = 'https://api.click.uz/v2/merchant/card_token/payment'
+    url = f'{settings.CLICK_BASE_URL}/payment'
     headers = {
         "Accept": "application/json",
         "Content-Type": "application/json",
@@ -90,7 +90,7 @@ async def remove_user_from_channels():
             return
 
         today = date.today()
-        expired_users = User.objects.filter(is_subscribed=True, subscription_end_date=today)
+        expired_users = User.objects.filter(is_subscribed=True, subscription_end_date=today, is_foreigner=False)
         if not await expired_users.aexists():
             return
 
@@ -196,7 +196,7 @@ async def kick_unpaid_users_handler():
         today = date.today()
         # Find users whose subscription expired today and are still subscribed
         # (these are users from the first attempt who failed payment)
-        expired_users = User.objects.filter(is_subscribed=True, subscription_end_date=today)
+        expired_users = User.objects.filter(is_subscribed=True, subscription_end_date=today, is_foreigner=False)
         if not await expired_users.aexists():
             return
 

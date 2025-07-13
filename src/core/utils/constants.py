@@ -18,10 +18,12 @@ class CONSTANTS:
     class PaymentMethod:
         CLICK = "click_up"
         PAYME = "payme"
+        TRIBUTE = "tribute"
 
         CHOICES = (
             (CLICK, 'Click'),
             (PAYME, 'Payme'),
+            (TRIBUTE, 'Tribute'),
         )
 
     class MembershipStatus:

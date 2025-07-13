@@ -20,7 +20,7 @@ from bot.functions import mask_middle, generate_auth_header, get_main_menu_butto
 from bot.keyboards import get_main_menu, get_menu_back_keyboard, back_menu_button, get_mini_menu_keyboard, \
     get_mini_back_keyboard
 from core.utils.constants import CONSTANTS
-from order.models import Course, UserCourseSubscription, Order, PrivateChannel, UserJoinChannel, Transaction
+from order.models import Course, Order, PrivateChannel
 from users.models import User, UserCard
 
 router = Router()
@@ -67,6 +67,8 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
 @router.message(Command('check'))
 async def cmd_check(message: types.Message, state: FSMContext):
+    await state.clear()
+
     telegram_id = message.from_user.id
     user = await User.objects.filter(telegram_id=telegram_id).afirst()
     if not user:
@@ -110,6 +112,8 @@ async def cmd_check(message: types.Message, state: FSMContext):
 
 @router.message(Command("cancel"))
 async def cmd_cancel(message: types.Message, state: FSMContext):
+    await state.clear()
+
     telegram_id = message.from_user.id
     user = await User.objects.aget(telegram_id=telegram_id)
 
@@ -152,7 +156,7 @@ async def cmd_cancel(message: types.Message, state: FSMContext):
         await message.answer(text, parse_mode="Markdown", reply_markup=builder.as_markup())
         return
 
-    elif not user.is_subscribed and not user.is_auto_subscribe:
+    else:
         text = (
             "Sizda aktiv obuna yoq"
         )
@@ -307,13 +311,37 @@ async def handle_offer_accepted(callback: types.CallbackQuery, state: FSMContext
         keyboard_buttons.append([
             InlineKeyboardButton(
                 text=f"🔐 {course.name or 'Obuna bo\'lish'}",
-                callback_data=f"subscribe_course_{course.id}"
+                callback_data=f"check_payment_type_{course.id}"
             )
         ])
 
     keyboard_buttons.append([back_menu_button()])
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown")
+
+
+@router.callback_query(F.data.startswith("check_payment_type_"))
+async def handle_payment_type(callback: types.CallbackQuery, state: FSMContext):
+    course_id = int(callback.data.split("_")[-1])
+    course = await Course.objects.aget(id=course_id)
+
+
+    keyboard = InlineKeyboardBuilder()
+    keyboard.button(text="Uzcard/Humo", callback_data=f"subscribe_course_{course_id}")
+    keyboard.button(text="Chet eldan", url='https://t.me/tribute/app?startapp=sxww')
+    keyboard.button(text="Orqaga", callback_data="active_courses")
+    keyboard.adjust(1)
+    await callback.message.edit_text(
+        "📢 *Yopiq kanalgа obuna bo‘lish narxi:*\n"
+        f"*1 oylik – narxi {course.amount} so‘m*\n"
+        "*Chet el uchun – 4€*\n\n"
+        "🕒 *To‘lov qilingandan so‘ng, har 30 kunda obuna uchun to‘lov avtomatik tarzda yechiladi.*\n"
+        "*To‘lovni vaqtida qilmagan foydalanuvchi kanaldan chiqarib yuboriladi.*\n\n"
+        "💳 *Kiritilgan kartalar ro'yxati:*\n"
+        "*To‘lov uchun kartani tanlang:*",
+        reply_markup=keyboard.as_markup(),
+        parse_mode="Markdown"
+    )
 
 
 @router.callback_query(F.data.startswith("subscribe_course_"))
@@ -375,6 +403,8 @@ async def handle_course_subscription(callback: types.CallbackQuery, state: FSMCo
 @router.callback_query(F.data.startswith("make_payment_"))
 async def handle_make_payment(callback: types.CallbackQuery, state: FSMContext):
     telegram_id = callback.from_user.id
+    await state.clear()
+
     try:
         course_id = int(callback.data.split("_")[-1])
         card_id = int(callback.data.split("_")[-2])
@@ -400,7 +430,7 @@ async def handle_make_payment(callback: types.CallbackQuery, state: FSMContext):
         course=course
     )
 
-    url = 'https://api.click.uz/v2/merchant/card_token/payment'
+    url = f'{settings.CLICK_BASE_URL}/payment'
 
     headers = {
         "Accept": "application/json",
@@ -418,7 +448,6 @@ async def handle_make_payment(callback: types.CallbackQuery, state: FSMContext):
         async with session.post(url, headers=headers, json=payload) as response:
             res_json = await response.json()
 
-    print(res_json)
     if res_json.get("error_code") == -5017:
         order.status = CONSTANTS.PaymentStatus.FAILED
         order.payment_id = res_json.get("payment_id")
@@ -543,13 +572,12 @@ async def handle_card_pan(message: types.Message, state: FSMContext):
         "Accept": "application/json"
     }
 
-    url = 'https://api.click.uz/v2/merchant/card_token/request'
+    url = f'{settings.CLICK_BASE_URL}/request'
 
     async with aiohttp.ClientSession() as session:
         async with session.post(url, headers=headers, json=payload) as response:
             res_json = await response.json()
 
-    print(res_json)
     if res_json.get('error_code'):
         await state.clear()
 
@@ -596,7 +624,7 @@ async def handle_confirmation(message: types.Message, state: FSMContext):
         "Content-Type": "application/json",
         "Auth": generate_auth_header(),
     }
-    url = 'https://api.click.uz/v2/merchant/card_token/verify'
+    url = f'{settings.CLICK_BASE_URL}/verify'
 
     payload = {
         "service_id": int(settings.CLICK_SERVICE_ID),
@@ -698,7 +726,7 @@ async def handle_check_membership_info(callback: types.CallbackQuery, state: FSM
     await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=keyboard)
 
 
-@router.callback_query(lambda c: c.data == 'cancel_membership')
+@router.callback_query(F.data == 'cancel_membership')
 async def handle_cancel_membership(callback: types.CallbackQuery, state: FSMContext):
     telegram_id = callback.from_user.id
     user = await User.objects.aget(telegram_id=telegram_id)
@@ -773,10 +801,10 @@ async def handle_confirm_cancel_membership(callback: types.CallbackQuery, state:
         "card_token": str(user_card.card_token),
     }
 
-    url = f'https://api.click.uz/v2/merchant/card_token/{payload['service_id']}/{payload["card_token"]}'
+    url = f'{settings.CLICK_BASE_URL}/{payload['service_id']}/{payload["card_token"]}'
 
     async with aiohttp.ClientSession() as session:
-        async with session.post(url, headers=headers, json=payload) as response:
+        async with session.delete(url, headers=headers, json=payload) as response:
             res_json = await response.json()
 
     print(res_json)
@@ -784,210 +812,13 @@ async def handle_confirm_cancel_membership(callback: types.CallbackQuery, state:
     await callback.message.edit_text("Obuna o`chirildi.", reply_markup=builder.as_markup())
 
 
-
-
-
-
-@router.callback_query(F.data == 'lang_uz')
-async def set_uzbek_language(callback: types.CallbackQuery):
-    user_id = callback.from_user.id
-
-    cache.set(f"user_lang:{user_id}", CONSTANTS.LANGUAGES.UZ, timeout=None)
-    user = await User.objects.aget(telegram_id=user_id)
-    user.language = CONSTANTS.LANGUAGES.UZ
-    await user.asave()
-
-    await callback.message.edit_text('Asosiy menyu:', reply_markup=get_main_menu())
-    await callback.answer()
-
-
-@router.callback_query(F.data == 'lang_ru')
-async def set_russian_language(callback: types.CallbackQuery):
-    user_id = callback.from_user.id
-
-    cache.set(f"user_lang:{user_id}", CONSTANTS.LANGUAGES.RU, timeout=None)
-    user = await User.objects.aget(telegram_id=user_id)
-    user.language = CONSTANTS.LANGUAGES.RU
-    await user.asave()
-
-    await callback.message.edit_text('Главное меню:', reply_markup=get_main_menu('ru'))
-    await callback.answer()
-
-
 @router.callback_query(F.data == "main_menu")
 async def return_to_main_menu(callback: types.CallbackQuery, state: FSMContext):
     """Return to main menu"""
-    user_id = callback.from_user.id
-
     message_text = "Asosiy menyu:"
-
+    await state.clear()
     await callback.answer()
     await callback.message.edit_text(message_text, reply_markup=get_main_menu())
-
-
-@router.callback_query(F.data == "courses")
-async def cmd_courses(callback: types.CallbackQuery, state: FSMContext):
-    """Handle /courses command"""
-    try:
-        # Delete previous message
-        await callback.message.delete()
-    except Exception:
-        pass
-
-    # Check if user has subscription
-    customer_subs = await UserCourseSubscription.objects.filter(
-        user__telegram_id=callback.from_user.id,
-        is_active=True
-    ).afirst()
-
-    if not customer_subs:
-        await callback.message.answer(
-            "Siz obuna sotib olmagansiz. Kursni ko'rish uchun iltimos obuna sotib oling!",
-            reply_markup=get_back_keyboard()
-        )
-        return
-
-    # Create keyboard with day buttons
-    keyboard = InlineKeyboardBuilder()
-
-    # Add buttons for days 1-10
-    for day in range(1, 11):
-        keyboard.button(
-            text=f"🏋️‍♂️ {day} - kun",
-            callback_data=f"course_day_{day}"
-        )
-
-    # Add back button to main menu
-    keyboard.button(text="Asosiy menyu", callback_data="main_menu")
-
-    # Adjust to 1 button per row
-    keyboard.adjust(1)
-
-    text = (
-        "📚 <b>Notiqlik kursi - 10 kunlik dastur</b>\n\n"
-        "Quyida kurs kunlari ro'yxati keltirilgan. "
-        "O'rganmoqchi bo'lgan kunni tanlang:"
-    )
-
-    await callback.message.answer(text, reply_markup=keyboard.as_markup(), parse_mode="HTML")
-
-
-@router.callback_query(F.data.in_(["subscription", 'back_to_courses']))
-async def cmd_subscription(callback: types.CallbackQuery, state: FSMContext):
-    """Handle /subscription command"""
-
-    user_id = callback.from_user.id
-
-    user_lang = cache.get(f"user_lang:{user_id}")
-    if not user_lang:
-        user = await User.objects.aget(telegram_id=user_id)
-        user_lang = user.language
-        cache.set(f"user_lang:{user_id}", user_lang, timeout=None)
-
-    course_amounts = Course.objects.all()
-
-    keyboard = InlineKeyboardBuilder()
-
-    async for course in course_amounts:
-        keyboard.button(text=f"{course.name}", callback_data=f"select_amount_{course.id}")
-
-    if user_lang == CONSTANTS.LANGUAGES.RU:
-        keyboard.button(text='Главное меню', callback_data="main_menu")
-        message_text = "Пожалуйста, выберите курс:"
-    else:
-        keyboard.button(text='Asosiy menyu', callback_data="main_menu")
-        message_text = "Iltimos, kursni tanlang:"
-
-    keyboard.adjust(1)
-
-    await callback.message.edit_text(
-        message_text,
-        reply_markup=keyboard.as_markup()
-    )
-
-@router.callback_query(F.data.startswith("select_amount_"))
-async def select_amount(callback: types.CallbackQuery, state: FSMContext):
-    """Handle amount selection"""
-
-    amount_id = int(callback.data.split("_")[-1])
-
-    await state.update_data(selected_amount_id=amount_id)
-
-    course_amount = await Course.objects.filter(id=amount_id).afirst()
-
-    keyboard = InlineKeyboardBuilder()
-    keyboard.button(text="💳 Click", callback_data="click_payment")
-    keyboard.button(text="✅ To'lovni tekshirish", callback_data=f"verify_payment_{course_amount.id}"),
-    keyboard.button(text='🔙 Orqaga', callback_data="subscription")
-    keyboard.button(text='Asosiy menyu', callback_data="main_menu")
-    keyboard.adjust(1)
-
-    formatted_amount = f"{course_amount.amount:,}".replace(',', ' ')
-
-    message_text = (
-        f"▶ <b>Kurs</b>: {course_amount.name}\n"
-        f"📃 <b>Kurs haqida</b>: {course_amount.description}\n"
-        f"💵 <b>Narxi:</b> {formatted_amount} so`m\n"
-        f"📆 <b>Kurs davomiyligi</b>: {course_amount.period} kun davom etadi\n\n"
-        "Iltimos, to'lov usulini tanlang:"
-    )
-
-    await callback.message.edit_text(
-        message_text,
-        reply_markup=keyboard.as_markup(),
-        parse_mode="HTML"
-    )
-
-
-@router.callback_query(F.data == "click_payment")
-async def click_payment(callback: types.CallbackQuery, state: FSMContext):
-    # Get data from state
-    user_data = await state.get_data()
-    amount_id = user_data.get("selected_amount_id")
-
-    if not amount_id:
-        await callback.message.answer("Xatolik yuz berdi. Iltimos qaytadan urinib ko'ring.")
-        return
-
-    course = await Course.objects.filter(id=amount_id).afirst()
-    private_channel = await PrivateChannel.objects.aget(course_id=course.id)
-    user_id = callback.from_user.id
-
-    order = await Order.objects.acreate(
-        user_id=user_id,
-        course_id=course.id,
-        amount=course.amount,
-    )
-
-    await UserJoinChannel.objects.acreate(
-        user_id=user_id,
-        channel_id=private_channel.id,
-    )
-
-    base_url = "https://my.click.uz/services/pay"
-    return_url = ""
-
-    paylink_url = (
-        f"{base_url}?service_id={settings.CLICK_SERVICE_ID}&merchant_id={settings.CLICK_MERCHANT_ID}"
-        f"&amount={course.amount}&transaction_param={order.id}"
-        f"&return_url={return_url}"
-    )
-
-    await callback.answer()
-
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="💳 To'lovni amalga oshirish", url=paylink_url)],
-        [InlineKeyboardButton(text="✅ To'lovni tekshirish", callback_data=f"verify_payment_{course.id}")],
-        [InlineKeyboardButton(text="🔙 Orqaga", callback_data="back_to_courses")]
-    ])
-
-    await callback.message.edit_text(
-        f"💰 To'lov miqdori: {course.amount:,} so'm\n"
-        f"➡️ Kurs: {course.name}\n"
-        "💳 To'lov turi: Click\n\n"
-        f"To'lovni amalga oshirish uchun quyidagi tugmani bosing:",
-        reply_markup=keyboard
-    )
 
 
 @router.callback_query(F.data.in_(["motivation"]))
@@ -1119,7 +950,7 @@ async def receive_motivation_video(message: types.Message, state: FSMContext):
     else:
         result_text = f"✅ Video yuborildi!\n\nMuvaffaqiyatli: {sent_count}\nXatolik: {failed_count}"
 
-    await message.answer(result_text, reply_markup=get_main_menu(user_lang))
+    await message.answer(result_text, reply_markup=get_main_menu())
 
 
 # Handler for receiving motivation text from staff
@@ -1155,7 +986,7 @@ async def receive_motivation_text(message: types.Message, state: FSMContext):
     else:
         result_text = f"✅ Matn yuborildi!\n\nMuvaffaqiyatli: {sent_count}\nXatolik: {failed_count}"
 
-    await message.answer(result_text, reply_markup=get_main_menu(user_lang))
+    await message.answer(result_text, reply_markup=get_main_menu())
 
 
 # Catch any other callbacks not specified above

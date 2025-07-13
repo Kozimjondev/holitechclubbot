@@ -1,10 +1,14 @@
 import base64
 import binascii
 import hashlib
+import json
 import logging
+import hmac
 
 from django.conf import settings
 from django.utils import timezone
+from django.utils.dateparse import parse_datetime
+from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -23,6 +27,7 @@ from order.methods.create_transaction import CreateTransaction
 from order.methods.perform_transaction import PerformTransaction
 from order.models import Order, Transaction
 from order.services import SubscriptionService
+from users.models import User
 
 logger = logging.getLogger(__name__)
 
@@ -323,3 +328,172 @@ class ClickWebhook(APIView):
         """
         subscription = SubscriptionService(transaction)
         subscription.cancel_subscription()
+
+
+class TributeWebhookAPIView(APIView):
+    """
+    Webhook API for handling Tribute Bot events
+    """
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        # Get API key from settings
+        self.api_key = getattr(settings, 'TRIBUTE_API_KEY', None)
+        if not self.api_key:
+            logger.error("TRIBUTE_API_KEY not found in settings")
+
+    def verify_signature(self, request_body, signature_header):
+        """
+        Verify HMAC-SHA256 signature from trbt-signature header
+        """
+        if not self.api_key:
+            logger.error("Cannot verify signature: API key not configured")
+            return False
+
+        if not signature_header:
+            logger.error("Missing trbt-signature header")
+            return False
+
+        try:
+            expected_signature = hmac.new(
+                self.api_key.encode('utf-8'),
+                request_body,
+                hashlib.sha256
+            ).hexdigest()
+
+            return hmac.compare_digest(signature_header, expected_signature)
+        except Exception as e:
+            logger.error(f"Error verifying signature: {str(e)}")
+            return False
+
+    def handle_new_subscription(self, payload):
+        """
+        Handle new subscription event
+        """
+        try:
+            subscription_data = {
+                'subscription_name': payload.get('subscription_name'),
+                'subscription_id': payload.get('subscription_id'),
+                'period_id': payload.get('period_id'),
+                'period': payload.get('period'),
+                'price': payload.get('price'),
+                'amount': payload.get('amount'),
+                'currency': payload.get('currency'),
+                'user_id': payload.get('user_id'),
+                'telegram_user_id': payload.get('telegram_user_id'),
+                'channel_id': payload.get('channel_id'),
+                'channel_name': payload.get('channel_name'),
+                'expires_at': payload.get('expires_at')
+            }
+
+            logger.info(f"New subscription received: {subscription_data}")
+            try:
+                user = User.objects.get(telegram_id=payload.get('telegram_user_id'))
+            except Exception as e:
+                logger.error(f"Error getting user: {str(e)}")
+                return False
+            Transaction.objects.create(
+                user=user,
+                amount=int(subscription_data.get('amount')),
+                state=Transaction.SUCCESSFULLY,
+                payment_method=CONSTANTS.PaymentMethod.TRIBUTE,
+                fiscal_data=subscription_data
+            )
+            user.is_foreigner = True
+            user.is_subscribed = True
+            user.is_auto_subscribed = True
+            user.subscription_start_date = timezone.now().date()
+
+            expires_at_str = subscription_data.get('expires_at')
+            expires_at_datetime = parse_datetime(expires_at_str)
+            user.subscription_end_date = expires_at_datetime.date()
+
+            user.save()
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error handling new subscription: {str(e)}")
+            return False
+
+    def handle_subscription_cancelled(self, payload):
+        """
+        Handle subscription cancelled event
+        """
+        try:
+            logger.info(f"Subscription cancelled: {payload}")
+            try:
+                user = User.objects.get(telegram_id=payload.get('telegram_user_id'))
+            except Exception as e:
+                logger.error(f"Error getting user: {str(e)}")
+                return False
+            user.is_auto_subscribe = False
+            user.save()
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Error handling subscription cancellation: {str(e)}")
+            return False
+
+    def post(self, request):
+        """
+        Handle POST requests from Tribute Bot webhook
+        """
+        try:
+            signature = request.headers.get('trbt-signature')
+            request_body = request.body
+
+            if not self.verify_signature(request_body, signature):
+                logger.warning("Invalid webhook signature")
+                return Response(
+                    {'error': 'Invalid signature'},
+                    status=status.HTTP_401_UNAUTHORIZED
+                )
+
+            try:
+                webhook_data = json.loads(request_body.decode('utf-8'))
+            except json.JSONDecodeError as e:
+                logger.error(f"Invalid JSON payload: {str(e)}")
+                return Response(
+                    {'error': 'Invalid JSON payload'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Extract event information
+            event_name = webhook_data.get('name')
+            created_at = webhook_data.get('created_at')
+            sent_at = webhook_data.get('sent_at')
+            payload = webhook_data.get('payload', {})
+
+            logger.info(f"Received webhook event: {event_name}")
+
+            if event_name == 'new_subscription':
+                success = self.handle_new_subscription(payload)
+            elif event_name == 'cancelled_subscription':
+                success = self.handle_subscription_cancelled(payload)
+            else:
+                logger.warning(f"Unknown event type: {event_name}")
+                return Response(
+                    {'error': f'Unknown event type: {event_name}'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            if success:
+                return Response(
+                    {'status': 'success', 'message': f'Event {event_name} processed successfully'},
+                    status=status.HTTP_200_OK
+                )
+            else:
+                return Response(
+                    {'error': f'Failed to process event {event_name}'},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+
+        except Exception as e:
+            logger.error(f"Unexpected error processing webhook: {str(e)}")
+            return Response(
+                {'error': 'Internal server error'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
