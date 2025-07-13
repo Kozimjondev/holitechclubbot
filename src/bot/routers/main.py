@@ -282,13 +282,13 @@ async def handle_offer_accepted(callback: types.CallbackQuery, state: FSMContext
     confirmed_cards = UserCard.objects.filter(user=user, is_confirmed=True)
     has_card = await sync_to_async(confirmed_cards.exists)()
 
-    if not has_card:
-        await callback.message.edit_text(
-            "💳 Iltimos karta raqaningizni kiriting:\n"
-            "Masalan: 8600....0509"
-        )
-        await state.set_state(UserCardStates.card_number)
-        return
+    # if not has_card:
+    #     await callback.message.edit_text(
+    #         "💳 Iltimos karta raqaningizni kiriting:\n"
+    #         "Masalan: 8600....0509"
+    #     )
+    #     await state.set_state(UserCardStates.card_number)
+    #     return
 
     courses = await sync_to_async(list)(Course.objects.all())
 
@@ -324,7 +324,6 @@ async def handle_offer_accepted(callback: types.CallbackQuery, state: FSMContext
 async def handle_payment_type(callback: types.CallbackQuery, state: FSMContext):
     course_id = int(callback.data.split("_")[-1])
     course = await Course.objects.aget(id=course_id)
-
 
     keyboard = InlineKeyboardBuilder()
     keyboard.button(text="Uzcard/Humo", callback_data=f"subscribe_course_{course_id}")
