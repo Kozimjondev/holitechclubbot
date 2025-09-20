@@ -76,9 +76,9 @@ async def cmd_check(message: types.Message, state: FSMContext):
         await message.answer('Ismingizni kiriting:')
     else:
         today = datetime.date.today()
+        period = (user.subscription_end_date - today).days
 
-        if user.is_subscribed and user.is_auto_subscribe:
-            period = (user.subscription_end_date - today).days
+        if user.is_subscribed and user.is_auto_subscribe and period > 0:
             text = (
                 f"Sizning a'zoligingiz tugashiga {period} kun qoldi.\n"
                 f"Obuna tugash sanasi: {user.subscription_end_date.strftime('%Y-%m-%d')}\n\n"
@@ -86,8 +86,7 @@ async def cmd_check(message: types.Message, state: FSMContext):
             )
             await message.answer(text, parse_mode="Markdown", reply_markup=get_menu_back_keyboard())
             return
-        elif user.is_subscribed and not user.is_auto_subscribe:
-            period = (user.subscription_end_date - today).days
+        elif user.is_subscribed and not user.is_auto_subscribe and period > 0:
             text = (
                 f"Sizning a'zoligingiz tugashiga {period} kun qoldi.\n"
                 f"Obuna tugash sanasi: {user.subscription_end_date.strftime('%Y-%m-%d')}\n\n"
