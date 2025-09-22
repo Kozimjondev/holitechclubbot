@@ -71,42 +71,46 @@ async def cmd_check(message: types.Message, state: FSMContext):
 
     telegram_id = message.from_user.id
     user = await User.objects.filter(telegram_id=telegram_id).afirst()
+
     if not user:
         await state.set_state(UserStates.name)
         await message.answer('Ismingizni kiriting:')
-    else:
-        today = datetime.date.today()
-        period = (user.subscription_end_date - today).days
+        return
 
-        if user.is_subscribed and user.is_auto_subscribe and period > 0:
+    today = datetime.date.today()
+    period = (user.subscription_end_date - today).days
+
+    if user.is_subscribed and period > 0:
+        if user.is_auto_subscribe:
             text = (
                 f"Sizning a'zoligingiz tugashiga {period} kun qoldi.\n"
                 f"Obuna tugash sanasi: {user.subscription_end_date.strftime('%Y-%m-%d')}\n\n"
                 f"Obuna tugash sanasida kartangizdan avtomat yechib olinadi!"
             )
-            await message.answer(text, parse_mode="Markdown", reply_markup=get_menu_back_keyboard())
-            return
-        elif user.is_subscribed and not user.is_auto_subscribe and period > 0:
+        else:
             text = (
                 f"Sizning a'zoligingiz tugashiga {period} kun qoldi.\n"
                 f"Obuna tugash sanasi: {user.subscription_end_date.strftime('%Y-%m-%d')}\n\n"
                 f"Siz obuna bo'lishni bekor qilgansiz. Obuna tugaganidan so'ng yopiq kanaldan chiqarib yuborilasiz!"
             )
-            await message.answer(text, parse_mode="Markdown", reply_markup=get_menu_back_keyboard())
-            return
 
-        text = "Siz Obuna sotib olmagansiz, Sotib olish uchun pastdagi tugmani bosing:"
+        await message.answer(text, parse_mode="Markdown", reply_markup=get_menu_back_keyboard())
+        return
 
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(
-                text=f"Obuna sotib olish",
-                callback_data="mini_menu",
-            )],
-            [back_menu_button()]
-        ])
+    if user.is_subscribed and period <= 0:
+        text = "Sizning obunangiz tugagan! Yangi obuna sotib olish uchun pastdagi tugmani bosing:"
+    else:
+        text = "Siz obuna sotib olmagansiz, sotib olish uchun pastdagi tugmani bosing:"
 
-        await message.answer(text, parse_mode="Markdown", reply_markup=keyboard)
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(
+            text="Obuna sotib olish",
+            callback_data="mini_menu",
+        )],
+        [back_menu_button()]
+    ])
 
+    await message.answer(text, reply_markup=keyboard)
 
 
 @router.message(Command("cancel"))
