@@ -692,40 +692,61 @@ async def handle_my_cards(callback: types.CallbackQuery, state: FSMContext):
 
 @router.callback_query(lambda c: c.data == 'check_membership_info')
 async def handle_check_membership_info(callback: types.CallbackQuery, state: FSMContext):
-    telegram_id = callback.from_user.id
-    user = await User.objects.aget(telegram_id=telegram_id)
-    today = datetime.date.today()
+    try:
+        telegram_id = callback.from_user.id
+        user = await User.objects.filter(telegram_id=telegram_id).afirst()
 
-    if user.is_subscribed and user.is_auto_subscribe:
+        if not user:
+            text = "Foydalanuvchi topilmadi. Iltimos, /start buyrug'ini bosing."
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[
+                [back_menu_button()]
+            ])
+            await callback.message.edit_text(text, reply_markup=keyboard)
+            await callback.answer()
+            return
+
+        today = datetime.date.today()
         period = (user.subscription_end_date - today).days
-        text = (
-            f"Sizning a'zoligingiz tugashiga {period} kun qoldi.\n"
-            f"Obuna tugash sanasi: {user.subscription_end_date.strftime('%Y-%m-%d')}\n\n"
-            f"Obuna tugash sanasida kartangizdan avtomat yechib olinadi!"
-        )
-        await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=get_menu_back_keyboard())
-        return
-    elif user.is_subscribed and not user.is_auto_subscribe:
-        period = (user.subscription_end_date - today).days
-        text = (
-            f"Sizning a'zoligingiz tugashiga {period} kun qoldi.\n"
-            f"Obuna tugash sanasi: {user.subscription_end_date.strftime('%Y-%m-%d')}\n\n"
-            f"Siz obuna bo'lishni bekor qilgansiz. Obuna tugaganidan so'ng yopiq kanaldan chiqarib yuborilasiz!"
-        )
-        await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=get_menu_back_keyboard())
-        return
 
-    text = "Siz Obuna sotib olmagansiz, Sotib olish uchun pastdagi tugmani bosing:"
+        if user.is_subscribed and period > 0:
+            base_text = (
+                f"Sizning a'zoligingiz tugashiga {period} kun qoldi.\n"
+                f"Obuna tugash sanasi: {user.subscription_end_date.strftime('%Y-%m-%d')}\n\n"
+            )
 
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(
-            text=f"Obuna sotib olish",
-            callback_data="mini_menu",
-        )],
-        [back_menu_button()]
-    ])
+            if user.is_auto_subscribe:
+                text = base_text + "Obuna tugash sanasida kartangizdan avtomat yechib olinadi!"
+            else:
+                text = base_text + "Siz obuna bo'lishni bekor qilgansiz. Obuna tugaganidan so'ng yopiq kanaldan chiqarib yuborilasiz!"
 
-    await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=keyboard)
+            await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=get_menu_back_keyboard())
+            await callback.answer()
+            return
+
+        if user.is_subscribed and period <= 0:
+            text = "Sizning obunangiz tugagan! Yangi obuna sotib olish uchun pastdagi tugmani bosing:"
+        else:
+            text = "Siz obuna sotib olmagansiz, sotib olish uchun pastdagi tugmani bosing:"
+
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(
+                text="Obuna sotib olish",
+                callback_data="mini_menu",
+            )],
+            [back_menu_button()]
+        ])
+
+        await callback.message.edit_text(text, reply_markup=keyboard)
+        await callback.answer()
+
+    except Exception as e:
+        text = "Xatolik yuz berdi. Iltimos, qayta urinib ko'ring."
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [back_menu_button()]
+        ])
+        await callback.message.edit_text(text, reply_markup=keyboard)
+        await callback.answer("Xatolik yuz berdi")
+        print(f"Error in handle_check_membership_info: {e}")
 
 
 @router.callback_query(F.data == 'cancel_membership')
