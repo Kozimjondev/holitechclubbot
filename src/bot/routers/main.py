@@ -691,6 +691,8 @@ async def handle_my_cards(callback: types.CallbackQuery, state: FSMContext):
 
 @router.callback_query(lambda c: c.data == 'check_membership_info')
 async def handle_check_membership_info(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer()
+
     try:
         telegram_id = callback.from_user.id
         user = await User.objects.filter(telegram_id=telegram_id).afirst()
@@ -701,9 +703,7 @@ async def handle_check_membership_info(callback: types.CallbackQuery, state: FSM
                 [back_menu_button()]
             ])
             await callback.message.edit_text(text, reply_markup=keyboard)
-            await callback.answer()
             return
-
 
         today = datetime.today().date()
         if user.subscription_end_date:
@@ -721,7 +721,6 @@ async def handle_check_membership_info(callback: types.CallbackQuery, state: FSM
                     text = base_text + "Siz obuna bo'lishni bekor qilgansiz. Obuna tugaganidan so'ng yopiq kanaldan chiqarib yuborilasiz!"
 
                 await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=get_menu_back_keyboard())
-                await callback.answer()
                 return
 
             if user.is_subscribed and period <= 0:
@@ -740,15 +739,33 @@ async def handle_check_membership_info(callback: types.CallbackQuery, state: FSM
         ])
 
         await callback.message.edit_text(text, reply_markup=keyboard)
-        await callback.answer()
+
+    except TelegramBadRequest as e:
+        # Callback query timeout xatolarini ignore qilish
+        if "query is too old" in str(e) or "query ID is invalid" in str(e):
+            print(f"Callback timeout ignored: {e}")
+            return
+
+        # Boshqa Telegram xatolari
+        text = "Xatolik yuz berdi. Iltimos, qayta urinib ko'ring."
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [back_menu_button()]
+        ])
+        try:
+            await callback.message.edit_text(text, reply_markup=keyboard)
+        except:
+            pass
+        print(f"Telegram error in handle_check_membership_info: {e}")
 
     except Exception as e:
         text = "Xatolik yuz berdi. Iltimos, qayta urinib ko'ring."
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [back_menu_button()]
         ])
-        await callback.message.edit_text(text, reply_markup=keyboard)
-        await callback.answer("Xatolik yuz berdi")
+        try:
+            await callback.message.edit_text(text, reply_markup=keyboard)
+        except:
+            pass
         print(f"Error in handle_check_membership_info: {e}")
 
 
@@ -1015,35 +1032,52 @@ async def receive_motivation_text(message: types.Message, state: FSMContext):
     await message.answer(result_text, reply_markup=get_main_menu())
 
 
-@router.message(Command("send_payment_link"))
-async def send_payment_link(message: types.Message, state: FSMContext):
-    user_id = message.from_user.id
-    user = await User.objects.filter(telegram_id=user_id).afirst()
-    if not user:
-        return
-    elif not user.is_superuser:
-        await message.answer(
-            "Sizda foydalana olmaysiz, faqat admin user foydalana oladi"
-        )
-        return
-    bot = message.bot
+async def create_invite_with_retry(bot, channel_id, telegram_id, max_retries=5):
+    """Create invite link with multiple retry attempts"""
+    expire_date = datetime.now() + timedelta(hours=24)
+    expire_timestamp = int(expire_date.timestamp())
 
-    successful_transactions = Transaction.objects.filter(
-        state=Transaction.SUCCESSFULLY,
-        payment_method=CONSTANTS.PaymentMethod.CLICK
-    ) # todo: change queryset to Subscription model
+    for attempt in range(max_retries):
+        try:
+            invite_link = await bot.create_chat_invite_link(
+                chat_id=channel_id,
+                name=f"Payment link for user {telegram_id}",
+                expire_date=expire_timestamp,
+                member_limit=1,
+                creates_join_request=False
+            )
+            return invite_link
 
-    channel = await PrivateChannel.objects.afirst()
+        except TelegramRetryAfter as e:
+            if attempt < max_retries - 1:
+                wait_time = e.retry_after + 2
+                print(f"Flood control: waiting {wait_time}s (attempt {attempt + 1}/{max_retries})")
+                await asyncio.sleep(wait_time)
+            else:
+                print(f"Failed after {max_retries} attempts for user {telegram_id}")
+                raise
 
-    channel_id = channel.private_channel_id
+    return None
+
+
+async def send_invites_background(bot, channel_id, admin_chat_id):
+    """Background task to send invites"""
+    successful_transactions = [
+        t async for t in Transaction.objects.filter(
+            state=Transaction.SUCCESSFULLY,
+            payment_method=CONSTANTS.PaymentMethod.CLICK
+        ).order_by("-created_at")
+    ]
 
     sent_count = 0
     already_member_count = 0
     error_count = 0
 
-    async for transaction in successful_transactions:
+    for transaction in successful_transactions:
         telegram_id = transaction.user_id
+
         try:
+            # Check membership
             member = await bot.get_chat_member(chat_id=channel_id, user_id=telegram_id)
 
             if member.status in ["creator", "administrator", "member", "restricted"]:
@@ -1051,28 +1085,14 @@ async def send_payment_link(message: types.Message, state: FSMContext):
                 print(f"User {telegram_id} is already a member")
                 continue
 
-            expire_date = datetime.now() + timedelta(hours=24)
-            expire_timestamp = int(expire_date.timestamp())
+            # Create invite link with retry
+            invite_link = await create_invite_with_retry(bot, channel_id, telegram_id)
 
-            try:
-                invite_link = await bot.create_chat_invite_link(
-                    chat_id=channel_id,
-                    name=f"Payment link for user {telegram_id}",
-                    expire_date=expire_timestamp,
-                    member_limit=1,
-                    creates_join_request=False
-                )
-            except TelegramRetryAfter as e:
-                print(f"Flood control: waiting {e.retry_after} sec...")
-                await asyncio.sleep(e.retry_after)
-                invite_link = await bot.create_chat_invite_link(
-                    chat_id=channel_id,
-                    name=f"Payment link for user {telegram_id}",
-                    expire_date=expire_timestamp,
-                    member_limit=1,
-                    creates_join_request=False
-                )
+            if not invite_link:
+                error_count += 1
+                continue
 
+            # Send message
             await bot.send_message(
                 chat_id=telegram_id,
                 text=(
@@ -1088,8 +1108,17 @@ async def send_payment_link(message: types.Message, state: FSMContext):
             )
 
             sent_count += 1
-            print(f"Invite link sent to user {telegram_id}")
-            await asyncio.sleep(0.1)
+            print(f"✅ Invite link sent to user {telegram_id}")
+
+            # Longer delay to avoid flood control
+            await asyncio.sleep(1)  # 1 second between users
+
+        except TelegramRetryAfter as e:
+            print(f"Persistent flood control for {telegram_id}, skipping...")
+            error_count += 1
+            # Wait before next user
+            await asyncio.sleep(e.retry_after + 2)
+            continue
 
         except TelegramBadRequest as e:
             error_count += 1
@@ -1101,14 +1130,55 @@ async def send_payment_link(message: types.Message, state: FSMContext):
             print(f"Unexpected error for user {telegram_id}: {e}")
             continue
 
+    # Send final report
+    try:
+        await bot.send_message(
+            chat_id=admin_chat_id,
+            text=(
+                f"✅ Havolalar yuborish yakunlandi!\n\n"
+                f"📤 Yuborildi: {sent_count}\n"
+                f"👥 Allaqachon a'zo: {already_member_count}\n"
+                f"❌ Xatoliklar: {error_count}\n"
+                f"📊 Jami: {len(successful_transactions)}"
+            )
+        )
+    except:
+        pass
+
+    return sent_count, already_member_count, error_count
+
+
+@router.message(Command("send_payment_link"))
+async def send_payment_link(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    user = await User.objects.filter(telegram_id=user_id).afirst()
+
+    if not user:
+        return
+    elif not user.is_superuser:
+        await message.answer(
+            "Sizda foydalana olmaysiz, faqat admin user foydalana oladi"
+        )
+        return
+
+    bot = message.bot
+    channel = await PrivateChannel.objects.afirst()
+
+    if not channel:
+        await message.answer("❌ Kanal topilmadi!")
+        return
+
+    channel_id = channel.private_channel_id
+
+    # Immediate response to avoid webhook timeout
     await message.answer(
-        f"✅ Havolalar yuborish yakunlandi!\n\n"
-        f"📤 Yuborildi: {sent_count}\n"
-        f"👥 Allaqachon a'zo: {already_member_count}\n"
-        f"❌ Xatoliklar: {error_count}\n"
-        f"📊 Jami tranzaksiyalar: {successful_transactions.count()}"
+        "⏳ Jarayon boshlandi!\n\n"
+        "Havolalar fonda yuborilmoqda. Tugagach xabar keladi."
     )
 
+    asyncio.create_task(
+        send_invites_background(bot, channel_id, message.chat.id)
+    )
 
 # Catch any other callbacks not specified above
 @router.callback_query()
