@@ -704,26 +704,30 @@ async def handle_check_membership_info(callback: types.CallbackQuery, state: FSM
             await callback.answer()
             return
 
+
         today = datetime.today().date()
-        period = (user.subscription_end_date - today).days
+        if user.subscription_end_date:
+            period = (user.subscription_end_date - today).days
 
-        if user.is_subscribed and period > 0:
-            base_text = (
-                f"Sizning a'zoligingiz tugashiga {period} kun qoldi.\n"
-                f"Obuna tugash sanasi: {user.subscription_end_date.strftime('%Y-%m-%d')}\n\n"
-            )
+            if user.is_subscribed and period > 0:
+                base_text = (
+                    f"Sizning a'zoligingiz tugashiga {period} kun qoldi.\n"
+                    f"Obuna tugash sanasi: {user.subscription_end_date.strftime('%Y-%m-%d')}\n\n"
+                )
 
-            if user.is_auto_subscribe:
-                text = base_text + "Obuna tugash sanasida kartangizdan avtomat yechib olinadi!"
+                if user.is_auto_subscribe:
+                    text = base_text + "Obuna tugash sanasida kartangizdan avtomat yechib olinadi!"
+                else:
+                    text = base_text + "Siz obuna bo'lishni bekor qilgansiz. Obuna tugaganidan so'ng yopiq kanaldan chiqarib yuborilasiz!"
+
+                await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=get_menu_back_keyboard())
+                await callback.answer()
+                return
+
+            if user.is_subscribed and period <= 0:
+                text = "Sizning obunangiz tugagan! Yangi obuna sotib olish uchun pastdagi tugmani bosing:"
             else:
-                text = base_text + "Siz obuna bo'lishni bekor qilgansiz. Obuna tugaganidan so'ng yopiq kanaldan chiqarib yuborilasiz!"
-
-            await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=get_menu_back_keyboard())
-            await callback.answer()
-            return
-
-        if user.is_subscribed and period <= 0:
-            text = "Sizning obunangiz tugagan! Yangi obuna sotib olish uchun pastdagi tugmani bosing:"
+                text = "Siz obuna sotib olmagansiz, sotib olish uchun pastdagi tugmani bosing:"
         else:
             text = "Siz obuna sotib olmagansiz, sotib olish uchun pastdagi tugmani bosing:"
 
