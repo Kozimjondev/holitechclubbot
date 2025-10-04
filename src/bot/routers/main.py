@@ -78,30 +78,32 @@ async def cmd_check(message: types.Message, state: FSMContext):
         return
 
     today = datetime.date.today()
-    period = (user.subscription_end_date - today).days
+    if user.subscription_end_date:
+        period = (user.subscription_end_date - today).days
 
-    if user.is_subscribed and period > 0:
-        if user.is_auto_subscribe:
-            text = (
-                f"Sizning a'zoligingiz tugashiga {period} kun qoldi.\n"
-                f"Obuna tugash sanasi: {user.subscription_end_date.strftime('%Y-%m-%d')}\n\n"
-                f"Obuna tugash sanasida kartangizdan avtomat yechib olinadi!"
-            )
+        if user.is_subscribed and period > 0:
+            if user.is_auto_subscribe:
+                text = (
+                    f"Sizning a'zoligingiz tugashiga {period} kun qoldi.\n"
+                    f"Obuna tugash sanasi: {user.subscription_end_date.strftime('%Y-%m-%d')}\n\n"
+                    f"Obuna tugash sanasida kartangizdan avtomat yechib olinadi!"
+                )
+            else:
+                text = (
+                    f"Sizning a'zoligingiz tugashiga {period} kun qoldi.\n"
+                    f"Obuna tugash sanasi: {user.subscription_end_date.strftime('%Y-%m-%d')}\n\n"
+                    f"Siz obuna bo'lishni bekor qilgansiz. Obuna tugaganidan so'ng yopiq kanaldan chiqarib yuborilasiz!"
+                )
+
+            await message.answer(text, parse_mode="Markdown", reply_markup=get_menu_back_keyboard())
+            return
+
+        if user.is_subscribed and period <= 0:
+            text = "Sizning obunangiz tugagan! Yangi obuna sotib olish uchun pastdagi tugmani bosing:"
         else:
-            text = (
-                f"Sizning a'zoligingiz tugashiga {period} kun qoldi.\n"
-                f"Obuna tugash sanasi: {user.subscription_end_date.strftime('%Y-%m-%d')}\n\n"
-                f"Siz obuna bo'lishni bekor qilgansiz. Obuna tugaganidan so'ng yopiq kanaldan chiqarib yuborilasiz!"
-            )
-
-        await message.answer(text, parse_mode="Markdown", reply_markup=get_menu_back_keyboard())
-        return
-
-    if user.is_subscribed and period <= 0:
-        text = "Sizning obunangiz tugagan! Yangi obuna sotib olish uchun pastdagi tugmani bosing:"
+            text = "Siz obuna sotib olmagansiz, sotib olish uchun pastdagi tugmani bosing:"
     else:
         text = "Siz obuna sotib olmagansiz, sotib olish uchun pastdagi tugmani bosing:"
-
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(
             text="Obuna sotib olish",
