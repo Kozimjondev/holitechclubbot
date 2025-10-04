@@ -509,12 +509,6 @@ async def handle_make_payment(callback: types.CallbackQuery, state: FSMContext):
         ],
         [
             InlineKeyboardButton(
-                text="Obuna holatini tekshirish",
-                callback_data="check_membership_info"
-            )
-        ],
-        [
-            InlineKeyboardButton(
                 text="Savol berish",
                 url='https://t.me/yolda_korishamiz_support'
             )
