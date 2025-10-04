@@ -5,7 +5,7 @@ from datetime import timedelta, datetime
 import aiohttp
 from aiogram import F
 from aiogram import Router, types
-from aiogram.exceptions import TelegramBadRequest
+from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter
 from aiogram.filters import StateFilter
 from aiogram.filters.command import Command
 from aiogram.fsm.context import FSMContext
@@ -1033,7 +1033,6 @@ async def send_payment_link(message: types.Message, state: FSMContext):
         payment_method=CONSTANTS.PaymentMethod.CLICK
     ) # todo: change queryset to Subscription model
 
-    # successful_transactions = User.objects.all()
     channel = await PrivateChannel.objects.afirst()
 
     channel_id = channel.private_channel_id
@@ -1044,31 +1043,35 @@ async def send_payment_link(message: types.Message, state: FSMContext):
 
     async for transaction in successful_transactions:
         telegram_id = transaction.user_id
-        # telegram_id = transaction.telegram_id
         try:
-            # Check if user is already a member of the channel
             member = await bot.get_chat_member(chat_id=channel_id, user_id=telegram_id)
 
-            # Check membership status
-            # Statuses: creator, administrator, member, restricted, left, kicked
             if member.status in ["creator", "administrator", "member", "restricted"]:
-                # User is already in the channel
                 already_member_count += 1
                 print(f"User {telegram_id} is already a member")
                 continue
 
-            # User is not a member (status is "left" or "kicked")
-            # Create one-time invite link with 24-hour expiry
             expire_date = datetime.now() + timedelta(hours=24)
             expire_timestamp = int(expire_date.timestamp())
 
-            invite_link = await bot.create_chat_invite_link(
-                chat_id=channel_id,
-                name=f"Payment link for user {telegram_id}",
-                expire_date=expire_timestamp,
-                member_limit=1,  # One-time use
-                creates_join_request=False
-            )
+            try:
+                invite_link = await bot.create_chat_invite_link(
+                    chat_id=channel_id,
+                    name=f"Payment link for user {telegram_id}",
+                    expire_date=expire_timestamp,
+                    member_limit=1,
+                    creates_join_request=False
+                )
+            except TelegramRetryAfter as e:
+                print(f"Flood control: waiting {e.retry_after} sec...")
+                await asyncio.sleep(e.retry_after)
+                invite_link = await bot.create_chat_invite_link(
+                    chat_id=channel_id,
+                    name=f"Payment link for user {telegram_id}",
+                    expire_date=expire_timestamp,
+                    member_limit=1,
+                    creates_join_request=False
+                )
 
             await bot.send_message(
                 chat_id=telegram_id,
@@ -1087,6 +1090,7 @@ async def send_payment_link(message: types.Message, state: FSMContext):
             sent_count += 1
             print(f"Invite link sent to user {telegram_id}")
             await asyncio.sleep(0.1)
+
         except TelegramBadRequest as e:
             error_count += 1
             print(f"Error for user {telegram_id}: {e}")
