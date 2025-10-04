@@ -1014,7 +1014,7 @@ async def receive_motivation_text(message: types.Message, state: FSMContext):
 @router.message(Command("send_payment_link"))
 async def send_payment_link(message: types.Message, state: FSMContext):
     user_id = message.from_user.id
-    user = await User.objects.filter(id=user_id).afirst()
+    user = await User.objects.filter(telegram_id=user_id).afirst()
     if not user:
         return
     elif not user.is_superuser:
