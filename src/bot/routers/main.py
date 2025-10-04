@@ -1,10 +1,10 @@
-import datetime
 import time
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 import aiohttp
 from aiogram import F
 from aiogram import Router, types
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import StateFilter
 from aiogram.filters.command import Command
 from aiogram.fsm.context import FSMContext
@@ -20,7 +20,7 @@ from bot.functions import mask_middle, generate_auth_header, get_main_menu_butto
 from bot.keyboards import get_main_menu, get_menu_back_keyboard, back_menu_button, get_mini_menu_keyboard, \
     get_mini_back_keyboard
 from core.utils.constants import CONSTANTS
-from order.models import Course, Order, PrivateChannel
+from order.models import Course, Order, PrivateChannel, Transaction
 from users.models import User, UserCard
 
 router = Router()
@@ -77,7 +77,7 @@ async def cmd_check(message: types.Message, state: FSMContext):
         await message.answer('Ismingizni kiriting:')
         return
 
-    today = datetime.date.today()
+    today = datetime.today()
     if user.subscription_end_date:
         period = (user.subscription_end_date - today).days
 
@@ -127,7 +127,7 @@ async def cmd_cancel(message: types.Message, state: FSMContext):
         await message.answer('Ismingizni kiriting:')
         return
 
-    today = datetime.date.today()
+    today = datetime.today()
 
     subscription_end = user.subscription_end_date
     period = (subscription_end - today).days if subscription_end else None
@@ -701,7 +701,7 @@ async def handle_check_membership_info(callback: types.CallbackQuery, state: FSM
             await callback.answer()
             return
 
-        today = datetime.date.today()
+        today = datetime.today()
         period = (user.subscription_end_date - today).days
 
         if user.is_subscribed and period > 0:
@@ -749,7 +749,7 @@ async def handle_check_membership_info(callback: types.CallbackQuery, state: FSM
 async def handle_cancel_membership(callback: types.CallbackQuery, state: FSMContext):
     telegram_id = callback.from_user.id
     user = await User.objects.aget(telegram_id=telegram_id)
-    today = datetime.date.today()
+    today = datetime.today()
 
     subscription_end = user.subscription_end_date
     period = (subscription_end - today).days if subscription_end else None
@@ -1006,6 +1006,97 @@ async def receive_motivation_text(message: types.Message, state: FSMContext):
         result_text = f"✅ Matn yuborildi!\n\nMuvaffaqiyatli: {sent_count}\nXatolik: {failed_count}"
 
     await message.answer(result_text, reply_markup=get_main_menu())
+
+
+@router.message(Command("send_payment_link"))
+async def send_payment_link(message: types.Message, state: FSMContext):
+    user_id = message.from_user.id
+    user = await User.objects.filter(id=user_id).afirst()
+    if not user:
+        return
+    elif not user.is_superuser:
+        await message.answer(
+            "Sizda foydalana olmaysiz, faqat admin user foydalana oladi"
+        )
+        return
+    bot = message.bot
+
+    successful_transactions = Transaction.objects.filter(
+        state=Transaction.SUCCESSFULLY,
+        payment_method=CONSTANTS.PaymentMethod.CLICK
+    ) # todo: change queryset to Subscription model
+
+    # successful_transactions = User.objects.all()
+    channel = await PrivateChannel.objects.afirst()
+
+    channel_id = channel.private_channel_id
+
+    sent_count = 0
+    already_member_count = 0
+    error_count = 0
+
+    async for transaction in successful_transactions:
+        telegram_id = transaction.user_id
+        # telegram_id = transaction.telegram_id
+        try:
+            # Check if user is already a member of the channel
+            member = await bot.get_chat_member(chat_id=channel_id, user_id=telegram_id)
+
+            # Check membership status
+            # Statuses: creator, administrator, member, restricted, left, kicked
+            if member.status in ["creator", "administrator", "member", "restricted"]:
+                # User is already in the channel
+                already_member_count += 1
+                print(f"User {telegram_id} is already a member")
+                continue
+
+            # User is not a member (status is "left" or "kicked")
+            # Create one-time invite link with 24-hour expiry
+            expire_date = datetime.now() + timedelta(hours=24)
+            expire_timestamp = int(expire_date.timestamp())
+
+            invite_link = await bot.create_chat_invite_link(
+                chat_id=channel_id,
+                name=f"Payment link for user {telegram_id}",
+                expire_date=expire_timestamp,
+                member_limit=1,  # One-time use
+                creates_join_request=False
+            )
+
+            await bot.send_message(
+                chat_id=telegram_id,
+                text=(
+                    f"🎉 To'lovingiz tasdiqlandi!\n\n"
+                    f"🔗 Premium kanalimizga maxsus havola:\n\n"
+                    f"{invite_link.invite_link}\n\n"
+                    f"⚠️ Muhim:\n"
+                    f"• Havola 24 soat ichida amal qiladi\n"
+                    f"• Faqat bir marta ishlatiladi\n"
+                    f"• Darhol qo'shilish uchun havolani bosing\n\n"
+                    f"Xush kelibsiz! 🚀"
+                )
+            )
+
+            sent_count += 1
+            print(f"Invite link sent to user {telegram_id}")
+
+        except TelegramBadRequest as e:
+            error_count += 1
+            print(f"Error for user {telegram_id}: {e}")
+            continue
+
+        except Exception as e:
+            error_count += 1
+            print(f"Unexpected error for user {telegram_id}: {e}")
+            continue
+
+    await message.answer(
+        f"✅ Havolalar yuborish yakunlandi!\n\n"
+        f"📤 Yuborildi: {sent_count}\n"
+        f"👥 Allaqachon a'zo: {already_member_count}\n"
+        f"❌ Xatoliklar: {error_count}\n"
+        f"📊 Jami tranzaksiyalar: {successful_transactions.count()}"
+    )
 
 
 # Catch any other callbacks not specified above
