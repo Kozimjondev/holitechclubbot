@@ -518,11 +518,13 @@ async def handle_make_payment(callback: types.CallbackQuery, state: FSMContext):
     ])
 
     await callback.message.edit_text(
-        "✅ *Tabriklaymiz!* Siz *\"Toxtab qolma atlet\"* kanali a'zosiga aylangandingiz!\n\n"
-        "Sizning yopiq kanalga qo‘shilish uchun 1 oylik to‘lovingiz qabul qilindi.\n\n"
-        "🔁 Agar sizda havola ishlamayotgan bo‘lsa, bir necha daqiqadan keyin yana bir bor urinib ko‘ring.\n\n"
-        "👇 Pastdagi *\"Yopiq kanalga qo‘shilish\"* tugmasini bosib kanalaga qo‘shiling.\n"
-        "⚡ *Tugmacha 1 soat ishlaydi!*",
+        "✅ *Tabriklaymiz!* Siz *\"To'xtab qolma atlet\"* kanali a'zosiga aylandingiz! 💪\n\n"
+        "Sizning 1 oylik to'lovingiz muvaffaqiyatli qabul qilindi — endi yopiq kanal siz uchun ochiq!\n\n"
+        "👉 Avvalo pastdagi havolani bosib kanalga o'ting.\n"
+        "🔔 So'ngra kanalda *\"Подписаться\"* tugmasini bosib, a'zo bo'ling.\n\n"
+        "⚡️ *Eslatma:* tugma faqat 1 soat davomida faol!\n"
+        "🔁 Agar havola ishlamasa, birozdan so'ng yana urinib ko'ring.\n\n"
+        "👇 Pastdagi *\"Yopiq kanalga o'tish\"* tugmasini bosing va yangi bosqichni boshlang!",
         parse_mode="Markdown",
         reply_markup=keyboard
     )
