@@ -78,7 +78,7 @@ async def cmd_check(message: types.Message, state: FSMContext):
         await message.answer('Ismingizni kiriting:')
         return
 
-    today = datetime.today()
+    today = datetime.today().date()
     if user.subscription_end_date:
         period = (user.subscription_end_date - today).days
 
@@ -128,7 +128,7 @@ async def cmd_cancel(message: types.Message, state: FSMContext):
         await message.answer('Ismingizni kiriting:')
         return
 
-    today = datetime.today()
+    today = datetime.today().date()
 
     subscription_end = user.subscription_end_date
     period = (subscription_end - today).days if subscription_end else None
@@ -704,7 +704,7 @@ async def handle_check_membership_info(callback: types.CallbackQuery, state: FSM
             await callback.answer()
             return
 
-        today = datetime.today()
+        today = datetime.today().date()
         period = (user.subscription_end_date - today).days
 
         if user.is_subscribed and period > 0:
@@ -755,7 +755,7 @@ async def handle_cancel_membership(callback: types.CallbackQuery, state: FSMCont
     today = datetime.today()
 
     subscription_end = user.subscription_end_date
-    period = (subscription_end - today).days if subscription_end else None
+    period = (subscription_end - today.date()).days if subscription_end else None
 
     if user.is_subscribed and user.is_auto_subscribe:
 
