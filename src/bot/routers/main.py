@@ -1,3 +1,4 @@
+import asyncio
 import time
 from datetime import timedelta, datetime
 
@@ -1079,7 +1080,7 @@ async def send_payment_link(message: types.Message, state: FSMContext):
 
             sent_count += 1
             print(f"Invite link sent to user {telegram_id}")
-
+            await asyncio.sleep(0.1)
         except TelegramBadRequest as e:
             error_count += 1
             print(f"Error for user {telegram_id}: {e}")
