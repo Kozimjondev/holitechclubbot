@@ -8,6 +8,7 @@ from django.conf import settings
 from loguru import logger
 
 from .helpers import get_bot_webhook_url
+from .middleware.error_handler import ErrorHandlerMiddleware
 from .routers import router
 from .utils.storage import DjangoRedisStorage
 from aiogram.types import BotCommand, BotCommandScopeDefault
@@ -51,6 +52,10 @@ async def on_shutdown():
 
 def init_dispatcher():
     dp = Dispatcher(storage=DjangoRedisStorage())
+
+    # Register error handler middleware
+    dp.update.middleware(ErrorHandlerMiddleware())
+
     dp.include_router(router)
     return dp
 
