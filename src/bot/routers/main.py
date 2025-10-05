@@ -19,7 +19,7 @@ from django.utils import timezone
 
 from bot.data.states import UserStates, UserCardStates
 from bot.functions import mask_middle, generate_auth_header, get_main_menu_button, get_main_menu_keyboard
-from bot.helpers import get_or_create_user_with_state
+from bot.helpers import get_or_create_user_with_state, get_subscription_status
 from bot.keyboards import get_main_menu, get_menu_back_keyboard, back_menu_button, get_mini_menu_keyboard, \
     get_mini_back_keyboard
 from core.utils.constants import CONSTANTS
@@ -76,41 +76,7 @@ async def cmd_check(message: types.Message, state: FSMContext):
     if not user:
         return
 
-    today = datetime.today().date()
-    if user.subscription_end_date:
-        period = (user.subscription_end_date - today).days
-
-        if user.is_subscribed and period > 0:
-            if user.is_auto_subscribe:
-                text = (
-                    f"Sizning a'zoligingiz tugashiga {period} kun qoldi.\n"
-                    f"Obuna tugash sanasi: {user.subscription_end_date.strftime('%Y-%m-%d')}\n\n"
-                    f"Obuna tugash sanasida kartangizdan avtomat yechib olinadi!"
-                )
-            else:
-                text = (
-                    f"Sizning a'zoligingiz tugashiga {period} kun qoldi.\n"
-                    f"Obuna tugash sanasi: {user.subscription_end_date.strftime('%Y-%m-%d')}\n\n"
-                    f"Siz obuna bo'lishni bekor qilgansiz. Obuna tugaganidan so'ng yopiq kanaldan chiqarib yuborilasiz!"
-                )
-
-            await message.answer(text, parse_mode="Markdown", reply_markup=get_menu_back_keyboard())
-            return
-
-        if user.is_subscribed and period <= 0:
-            text = "Sizning obunangiz tugagan! Yangi obuna sotib olish uchun pastdagi tugmani bosing:"
-        else:
-            text = "Siz obuna sotib olmagansiz, sotib olish uchun pastdagi tugmani bosing:"
-    else:
-        text = "Siz obuna sotib olmagansiz, sotib olish uchun pastdagi tugmani bosing:"
-    keyboard = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(
-            text="Obuna sotib olish",
-            callback_data="mini_menu",
-        )],
-        [back_menu_button()]
-    ])
-
+    text, keyboard, _ = await get_subscription_status(user, message.from_user.id, message.bot)
     await message.answer(text, reply_markup=keyboard)
 
 
@@ -277,17 +243,6 @@ async def handle_offer_accepted(callback: types.CallbackQuery, state: FSMContext
         user.agreed_to_terms = True
         user.is_auto_subscribe = True
         await user.asave()
-
-    confirmed_cards = UserCard.objects.filter(user=user, is_confirmed=True)
-    has_card = await sync_to_async(confirmed_cards.exists)()
-
-    # if not has_card:
-    #     await callback.message.edit_text(
-    #         "💳 Iltimos karta raqaningizni kiriting:\n"
-    #         "Masalan: 8600....0509"
-    #     )
-    #     await state.set_state(UserCardStates.card_number)
-    #     return
 
     courses = await sync_to_async(list)(Course.objects.all())
 
@@ -581,7 +536,7 @@ async def handle_card_pan(message: types.Message, state: FSMContext):
             [InlineKeyboardButton(text="🔒 Obuna bo'lish", callback_data="subscribe_private_channel")]
         ])
         await message.answer(
-            "❌ Server javob bermadi. Iltimos, qayta urinib ko'ring.",
+            "❌ Click javob bermadi. Iltimos, qayta urinib ko'ring.",
             reply_markup=keyboard
         )
         return
@@ -709,79 +664,27 @@ async def handle_check_membership_info(callback: types.CallbackQuery, state: FSM
     await callback.answer()
 
     try:
-        telegram_id = callback.from_user.id
-        user = await User.objects.filter(telegram_id=telegram_id).afirst()
+        user = await User.objects.filter(telegram_id=callback.from_user.id).afirst()
 
         if not user:
             text = "Foydalanuvchi topilmadi. Iltimos, /start buyrug'ini bosing."
-            keyboard = InlineKeyboardMarkup(inline_keyboard=[
-                [back_menu_button()]
-            ])
+            keyboard = InlineKeyboardMarkup(inline_keyboard=[[back_menu_button()]])
             await callback.message.edit_text(text, reply_markup=keyboard)
             return
 
-        today = datetime.today().date()
-        if user.subscription_end_date:
-            period = (user.subscription_end_date - today).days
-
-            if user.is_subscribed and period > 0:
-                base_text = (
-                    f"Sizning a'zoligingiz tugashiga {period} kun qoldi.\n"
-                    f"Obuna tugash sanasi: {user.subscription_end_date.strftime('%Y-%m-%d')}\n\n"
-                )
-
-                if user.is_auto_subscribe:
-                    text = base_text + "Obuna tugash sanasida kartangizdan avtomat yechib olinadi!"
-                else:
-                    text = base_text + "Siz obuna bo'lishni bekor qilgansiz. Obuna tugaganidan so'ng yopiq kanaldan chiqarib yuborilasiz!"
-
-                await callback.message.edit_text(text, parse_mode="Markdown", reply_markup=get_menu_back_keyboard())
-                return
-
-            if user.is_subscribed and period <= 0:
-                text = "Sizning obunangiz tugagan! Yangi obuna sotib olish uchun pastdagi tugmani bosing:"
-            else:
-                text = "Siz obuna sotib olmagansiz, sotib olish uchun pastdagi tugmani bosing:"
-        else:
-            text = "Siz obuna sotib olmagansiz, sotib olish uchun pastdagi tugmani bosing:"
-
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(
-                text="Obuna sotib olish",
-                callback_data="mini_menu",
-            )],
-            [back_menu_button()]
-        ])
-
+        text, keyboard, _ = await get_subscription_status(user, callback.from_user.id, callback.bot)
         await callback.message.edit_text(text, reply_markup=keyboard)
 
     except TelegramBadRequest as e:
-        # Callback query timeout xatolarini ignore qilish
         if "query is too old" in str(e) or "query ID is invalid" in str(e):
-            print(f"Callback timeout ignored: {e}")
             return
 
-        # Boshqa Telegram xatolari
         text = "Xatolik yuz berdi. Iltimos, qayta urinib ko'ring."
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [back_menu_button()]
-        ])
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[[back_menu_button()]])
         try:
             await callback.message.edit_text(text, reply_markup=keyboard)
         except:
             pass
-        print(f"Telegram error in handle_check_membership_info: {e}")
-
-    except Exception as e:
-        text = "Xatolik yuz berdi. Iltimos, qayta urinib ko'ring."
-        keyboard = InlineKeyboardMarkup(inline_keyboard=[
-            [back_menu_button()]
-        ])
-        try:
-            await callback.message.edit_text(text, reply_markup=keyboard)
-        except:
-            pass
-        print(f"Error in handle_check_membership_info: {e}")
 
 
 @router.callback_query(F.data == 'cancel_membership')
