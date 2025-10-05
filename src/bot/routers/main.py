@@ -121,7 +121,7 @@ async def cmd_cancel(message: types.Message, state: FSMContext):
     await state.clear()
 
     telegram_id = message.from_user.id
-    user = await User.objects.aget(telegram_id=telegram_id)
+    user = await User.objects.filter(telegram_id=telegram_id).afirst()
 
     if not user:
         await state.set_state(UserStates.name)
