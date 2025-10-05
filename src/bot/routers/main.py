@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import time
 from datetime import timedelta, datetime
 
@@ -18,11 +19,14 @@ from django.utils import timezone
 
 from bot.data.states import UserStates, UserCardStates
 from bot.functions import mask_middle, generate_auth_header, get_main_menu_button, get_main_menu_keyboard
+from bot.helpers import get_or_create_user_with_state
 from bot.keyboards import get_main_menu, get_menu_back_keyboard, back_menu_button, get_mini_menu_keyboard, \
     get_mini_back_keyboard
 from core.utils.constants import CONSTANTS
 from order.models import Course, Order, PrivateChannel, Transaction
 from users.models import User, UserCard
+
+logger = logging.getLogger(__name__)
 
 router = Router()
 
@@ -68,14 +72,8 @@ async def cmd_start(message: types.Message, state: FSMContext):
 
 @router.message(Command('check'))
 async def cmd_check(message: types.Message, state: FSMContext):
-    await state.clear()
-
-    telegram_id = message.from_user.id
-    user = await User.objects.filter(telegram_id=telegram_id).afirst()
-
+    user = await get_or_create_user_with_state(message, state)
     if not user:
-        await state.set_state(UserStates.name)
-        await message.answer('Ismingizni kiriting:')
         return
 
     today = datetime.today().date()
@@ -118,14 +116,8 @@ async def cmd_check(message: types.Message, state: FSMContext):
 
 @router.message(Command("cancel"))
 async def cmd_cancel(message: types.Message, state: FSMContext):
-    await state.clear()
-
-    telegram_id = message.from_user.id
-    user = await User.objects.filter(telegram_id=telegram_id).afirst()
-
+    user = await get_or_create_user_with_state(message, state)
     if not user:
-        await state.set_state(UserStates.name)
-        await message.answer('Ismingizni kiriting:')
         return
 
     today = datetime.today().date()
@@ -240,6 +232,8 @@ async def handle_subscription_info(callback_query: CallbackQuery, state: FSMCont
 
 @router.callback_query(F.data == "subscribe_private_channel")
 async def handle_subscribe_click(callback: types.CallbackQuery):
+    await callback.answer()  # BIRINCHI!
+
     offer_url = settings.OFERTA_URL
 
     text = (
@@ -255,7 +249,6 @@ async def handle_subscribe_click(callback: types.CallbackQuery):
     ])
 
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode="Markdown")
-    await callback.answer()
 
 
 @router.callback_query(lambda c: c.data == 'mini_menu')
@@ -550,13 +543,13 @@ async def handle_card_pan(message: types.Message, state: FSMContext):
     card_pan = message.text
     if '/' not in card_pan:
         await state.set_state(UserCardStates.card_pan)
-        await message.answer("Iltimos tog`ri malumot kiriting, Masalan: 06/29")
+        await message.answer("Iltimos tog'ri malumot kiriting, Masalan: 06/29")
         return
 
     card_pan = message.text.replace("/", "")
     if len(card_pan) != 4:
         await state.set_state(UserCardStates.card_pan)
-        await message.answer("Iltimos togri raqamni kiriting")
+        await message.answer("Iltimos tog'ri malumot kiriting, Masalan: 06/29")
         return
 
     data = await state.get_data()
@@ -575,27 +568,49 @@ async def handle_card_pan(message: types.Message, state: FSMContext):
 
     url = f'{settings.CLICK_BASE_URL}/request'
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(url, headers=headers, json=payload) as response:
-            res_json = await response.json()
+    try:
+        timeout = aiohttp.ClientTimeout(total=10)
 
-    if res_json.get('error_code'):
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.post(url, headers=headers, json=payload) as response:
+                res_json = await response.json()
+
+    except asyncio.TimeoutError:
         await state.clear()
-
         keyboard = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🔒 Obuna bo'lish", callback_data="subscribe_private_channel")]
         ])
+        await message.answer(
+            "❌ Server javob bermadi. Iltimos, qayta urinib ko'ring.",
+            reply_markup=keyboard
+        )
+        return
+    except Exception as e:
+        logger.error(f"Click API error: {e}")
+        await state.clear()
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔒 Obuna bo'lish", callback_data="subscribe_private_channel")]
+        ])
+        await message.answer(
+            "❌ Xatolik yuz berdi. Qayta urinib ko'ring.",
+            reply_markup=keyboard
+        )
+        return
 
-        await message.answer("❌ Karta qoshishda xatolik yuz berdi.", reply_markup=keyboard)
+    if res_json.get('error_code'):
+        await state.clear()
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🔒 Obuna bo'lish", callback_data="subscribe_private_channel")]
+        ])
+        await message.answer("❌ Karta qo'shishda xatolik yuz berdi.", reply_markup=keyboard)
         return
 
     if not res_json.get("card_token"):
-        await message.answer("❌ Karta qoshishda xatolik yuz berdi.")
+        await message.answer("❌ Karta qo'shishda xatolik yuz berdi.")
         await state.clear()
         return
 
     user = await User.objects.aget(telegram_id=message.from_user.id)
-
     marked_pan = mask_middle(card_number)
 
     await UserCard.objects.acreate(
@@ -858,9 +873,9 @@ async def handle_confirm_cancel_membership(callback: types.CallbackQuery, state:
 @router.callback_query(F.data == "main_menu")
 async def return_to_main_menu(callback: types.CallbackQuery, state: FSMContext):
     """Return to main menu"""
+    await callback.answer()
     message_text = "Asosiy menyu:"
     await state.clear()
-    await callback.answer()
     await callback.message.edit_text(message_text, reply_markup=get_main_menu())
 
 

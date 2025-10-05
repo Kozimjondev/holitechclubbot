@@ -274,7 +274,6 @@ def setup_scheduler():
     """Setup and start the scheduler with jobs - only run once per application"""
     print(settings.RUN_SCHEDULER)
     if settings.RUN_SCHEDULER:
-        print("1......")
         try:
             scheduler.add_job(
                 remove_user_from_channels_sync,
