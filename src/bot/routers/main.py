@@ -293,8 +293,7 @@ async def handle_payment_type(callback: types.CallbackQuery, state: FSMContext):
 
     keyboard = InlineKeyboardBuilder()
 
-    if user.is_staff:
-        keyboard.button(text="Click tolov", callback_data=f"click_payment_{course_id}")
+    keyboard.button(text="Click tolov", callback_data=f"click_payment_{course_id}")
 
     keyboard.button(text="Uzcard/Humo", callback_data=f"subscribe_course_{course_id}")
     keyboard.button(text="Chet eldan", url='https://t.me/tribute/app?startapp=sxww')
@@ -329,8 +328,7 @@ async def click_payment(callback: types.CallbackQuery, state: FSMContext):
     order = await Order.objects.acreate(
         user_id=user_id,
         course_id=course.id,
-        # amount=course.amount,
-        amount=1000
+        amount=course.amount,
     )
 
     base_url = "https://my.click.uz/services/pay"
@@ -338,7 +336,7 @@ async def click_payment(callback: types.CallbackQuery, state: FSMContext):
 
     paylink_url = (
         f"{base_url}?service_id={settings.CLICK_SERVICE_ID}&merchant_id={settings.CLICK_MERCHANT_ID}"
-        f"&amount={1000}&transaction_param={order.id}"
+        f"&amount={course.amount}&transaction_param={order.id}"
         f"&return_url={return_url}"
     )
 

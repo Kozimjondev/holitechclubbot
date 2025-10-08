@@ -4,8 +4,6 @@ services:
     image: postgres:15
     restart: unless-stopped
     env_file: .env
-    ports:
-      - "5433:5432"
     networks:
       - payment_bot_net
     volumes:
