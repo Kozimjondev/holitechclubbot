@@ -21,6 +21,14 @@ class SubscriptionService:
             end_date=date.today() + timedelta(days=order.course.period),
         )
 
+        if not self.transaction.user.is_subscribed:
+            self.transaction.user.subscription_start_date = timezone.now().date()
+            self.transaction.user.is_subscribed = True
+
+        self.transaction.user.is_auto_subscribe = False
+        self.transaction.user.subscription_end_date = timezone.now().date() + timedelta(days=order.course.period)
+        self.transaction.user.save()
+
     def get_order(self):
         return Order.objects.get(id=self.transaction.order_id)
 

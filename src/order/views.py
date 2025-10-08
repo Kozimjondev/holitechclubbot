@@ -267,9 +267,6 @@ class ClickWebhook(APIView):
             }
         )
 
-        # callback event
-        # self.created_payment(params)
-
         return {
             "click_trans_id": params.click_trans_id,
             "merchant_trans_id": order.id,

@@ -276,24 +276,86 @@ async def handle_offer_accepted(callback: types.CallbackQuery, state: FSMContext
 
 @router.callback_query(F.data.startswith("check_payment_type_"))
 async def handle_payment_type(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer()
+
+    telegram_id = callback.from_user.id
     course_id = int(callback.data.split("_")[-1])
-    course = await Course.objects.aget(id=course_id)
+
+    try:
+        course = await Course.objects.aget(id=course_id)
+        user = await User.objects.aget(telegram_id=telegram_id)
+    except Course.DoesNotExist:
+        await callback.message.answer("❌ Kurs topilmadi.")
+        return
+    except User.DoesNotExist:
+        await callback.message.answer("❌ Foydalanuvchi topilmadi.")
+        return
 
     keyboard = InlineKeyboardBuilder()
+
+    if user.is_staff:
+        keyboard.button(text="Click tolov", callback_data=f"click_payment_{course_id}")
+
     keyboard.button(text="Uzcard/Humo", callback_data=f"subscribe_course_{course_id}")
     keyboard.button(text="Chet eldan", url='https://t.me/tribute/app?startapp=sxww')
     keyboard.button(text="Orqaga", callback_data="active_courses")
     keyboard.adjust(1)
+
     await callback.message.edit_text(
-        "📢 *Yopiq kanalgа obuna bo‘lish narxi:*\n"
-        f"*1 oylik – narxi {course.amount} so‘m*\n"
+        "📢 *Yopiq kanalga obuna bo'lish narxi:*\n"
+        f"*1 oylik – narxi {course.amount} so'm*\n"
         "*Chet el uchun – 4€*\n\n"
-        "🕒 *To‘lov qilingandan so‘ng, har 30 kunda obuna uchun to‘lov avtomatik tarzda yechiladi.*\n"
-        "*To‘lovni vaqtida qilmagan foydalanuvchi kanaldan chiqarib yuboriladi.*\n\n"
-        "💳 *Kiritilgan kartalar ro'yxati:*\n"
-        "*To‘lov uchun kartani tanlang:*",
+        "🕒 *To'lov qilingandan so'ng, har 30 kunda obuna uchun to'lov avtomatik tarzda yechiladi.*\n"
+        "*To'lovni vaqtida qilmagan foydalanuvchi kanaldan chiqarib yuboriladi.*\n\n"
+        "💳 *To'lov uchun usulni tanlang:*",
         reply_markup=keyboard.as_markup(),
         parse_mode="Markdown"
+    )
+
+
+@router.callback_query(F.data.startswith("click_payment_"))
+async def click_payment(callback: types.CallbackQuery, state: FSMContext):
+    await callback.answer()
+
+    course_id = int(callback.data.split("_")[-1])
+    try:
+        course = await Course.objects.aget(id=course_id)
+    except:
+        await callback.message.answer("Xatolik yuz berdi. Iltimos qaytadan urinib ko'ring.")
+        return
+
+    user_id = callback.from_user.id
+
+    order = await Order.objects.acreate(
+        user_id=user_id,
+        course_id=course.id,
+        # amount=course.amount,
+        amount=1000
+    )
+
+    base_url = "https://my.click.uz/services/pay"
+    return_url = ""
+
+    paylink_url = (
+        f"{base_url}?service_id={settings.CLICK_SERVICE_ID}&merchant_id={settings.CLICK_MERCHANT_ID}"
+        f"&amount={1000}&transaction_param={order.id}"
+        f"&return_url={return_url}"
+    )
+
+    await callback.answer()
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💳 To'lovni amalga oshirish", url=paylink_url)],
+        [InlineKeyboardButton(text="Obunani tekshirish", callback_data='check_membership_info')],
+        [InlineKeyboardButton(text="🔙 Orqaga", callback_data="back_to_courses")]
+    ])
+
+    await callback.message.edit_text(
+        f"💰 To'lov miqdori: {course.amount:,} so'm\n"
+        f"➡️ Kurs: {course.name}\n"
+        "💳 To'lov turi: Click\n\n"
+        f"To'lovni amalga oshirish uchun quyidagi tugmani bosing:",
+        reply_markup=keyboard
     )
 
 
@@ -422,11 +484,7 @@ async def handle_make_payment(callback: types.CallbackQuery, state: FSMContext):
     order.payment_id = res_json.get("payment_id")
     await order.asave()
 
-    if not user.is_subscribed:
-        user.subscription_start_date = timezone.now().date()
-        user.is_subscribed = True
-
-    user.subscription_end_date = timezone.now().date() + timedelta(days=course.period)
+    user.is_auto_subscribe = True
     await user.asave()
 
     private_channel = await PrivateChannel.objects.filter(course=course).afirst()
@@ -524,7 +582,7 @@ async def handle_card_pan(message: types.Message, state: FSMContext):
     url = f'{settings.CLICK_BASE_URL}/request'
 
     try:
-        timeout = aiohttp.ClientTimeout(total=10)
+        timeout = aiohttp.ClientTimeout(total=15)
 
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.post(url, headers=headers, json=payload) as response:
