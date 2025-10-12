@@ -19,6 +19,9 @@ class UserAdmin(BaseUserAdmin):
     )
     ordering = ('created_at',)
 
+    # ✅ make timestamps readonly
+    readonly_fields = ('created_at', 'updated_at', 'last_login')
+
     fieldsets = (
         (None, {'fields': ('telegram_id', 'password')}),
         (_('Personal info'), {
