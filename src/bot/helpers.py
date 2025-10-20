@@ -46,8 +46,6 @@ async def get_or_create_user_with_state(message: types.Message, state: FSMContex
     return user
 
 
-# helpers.py
-
 async def get_subscription_status(user, telegram_id, bot):
     """
     Check user subscription status and return text + keyboard.
@@ -81,7 +79,8 @@ async def get_subscription_status(user, telegram_id, bot):
     if user.is_auto_subscribe:
         text = base_text + "Obuna tugash sanasida kartangizdan avtomat yechib olinadi!"
     else:
-        text = base_text + "Siz obuna bo'lishni bekor qilgansiz. Obuna tugaganidan so'ng yopiq kanaldan chiqarib yuborilasiz!"
+        text = base_text + ("siz bir martalik obunani sotib olgansiz. Obunani uzaytirish uchun qayta to‘lov amalga oshiring. "
+                            "Aks holda, obuna muddati tugagach, yopiq kanaldan chiqarilasiz.")
 
     channel = await PrivateChannel.objects.afirst()
     if not channel:

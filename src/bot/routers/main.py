@@ -303,7 +303,7 @@ async def handle_payment_type(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.edit_text(
         "📢 *Yopiq kanalga obuna bo'lish narxi:*\n"
         f"*1 oylik – narxi {course.amount} so'm*\n"
-        "*Chet el uchun – 4€*\n\n"
+        "*Chet el uchun – 5€*\n\n"
         "🕒 *To'lov qilingandan so'ng, har 30 kunda obuna uchun to'lov avtomatik tarzda yechiladi.*\n"
         "*To'lovni vaqtida qilmagan foydalanuvchi kanaldan chiqarib yuboriladi.*\n\n"
         "💳 *To'lov uchun usulni tanlang:*",
