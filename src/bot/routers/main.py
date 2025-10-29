@@ -483,6 +483,15 @@ async def handle_make_payment(callback: types.CallbackQuery, state: FSMContext):
     await order.asave()
 
     user.is_auto_subscribe = True
+
+    if user.subscription_start_date is None:
+        user.subscription_start_date = timezone.now().date()
+
+    if user.subscription_end_date is None:
+        user.subscription_end_date = timezone.now().date() + timedelta(days=course.period)
+    else:
+        user.subscription_end_date = user.subscription_end_date + timedelta(days=course.period)
+
     await user.asave()
 
     private_channel = await PrivateChannel.objects.filter(course=course).afirst()
