@@ -1,6 +1,8 @@
 import logging
 import time
 from datetime import date, timedelta
+
+from aiogram.exceptions import TelegramForbiddenError
 from celery import shared_task
 from django.utils import timezone
 from django.conf import settings
@@ -13,6 +15,9 @@ from users.models import User, UserCard
 from bot.misc import bot
 
 logger = logging.getLogger(__name__)
+
+
+GROUP_ID = -1002634576381
 
 
 async def process_auto_payment(user, course, user_card):
@@ -56,7 +61,6 @@ async def process_auto_payment(user, course, user_card):
 
         user.subscription_end_date = timezone.now().date() + timedelta(days=course.period)
         if not user.is_subscribed:
-            user.subscription_start_date = timezone.now().date()
             user.is_subscribed = True
         await user.asave()
 
@@ -95,11 +99,24 @@ async def _process_expired_subscriptions():
                         telegram_id,
                         "Sizning obunangiz tugaganligi uchun yopiq kanaldan chiqarildingiz!"
                     )
-                    await bot.ban_chat_member(
-                        chat_id=private_channel.private_channel_id,
-                        user_id=telegram_id,
-                        until_date=until_date
-                    )
+                    try:
+                        await bot.ban_chat_member(
+                            chat_id=private_channel.private_channel_id,
+                            user_id=telegram_id,
+                            until_date=until_date
+                        )
+                    except e:
+                        logger.error(e)
+
+                    try:
+                        await bot.ban_chat_member(
+                            chat_id=GROUP_ID,
+                            user_id=telegram_id,
+                            until_date=until_date
+                        )
+                    except TelegramForbiddenError:
+                        logger.error(f"User not found")
+
                     user.is_subscribed = False
                     await user.asave()
                     logger.info(f"Removed non-auto-subscribe user {telegram_id}")
@@ -112,13 +129,28 @@ async def _process_expired_subscriptions():
                             telegram_id,
                             "Sizning obunangiz tugaganligi uchun yopiq kanaldan chiqarildingiz!"
                         )
-                        await bot.ban_chat_member(
-                            chat_id=private_channel.private_channel_id,
-                            user_id=telegram_id,
-                            until_date=until_date
-                        )
+
+                        try:
+                            await bot.ban_chat_member(
+                                chat_id=private_channel.private_channel_id,
+                                user_id=telegram_id,
+                                until_date=until_date
+                            )
+                        except e:
+                            logger.error(e)
+
+                        try:
+                            await bot.ban_chat_member(
+                                chat_id=GROUP_ID,
+                                user_id=telegram_id,
+                                until_date=until_date
+                            )
+                        except TelegramForbiddenError:
+                            logger.error(f"User not found")
+
                         user.is_subscribed = False
                         await user.asave()
+
                         logger.info(f"Removed user {telegram_id} - no card available")
                     else:
                         success, error_type = await process_auto_payment(user, course, user_card)
@@ -183,11 +215,24 @@ async def _kick_unpaid_users():
                             telegram_id,
                             "Sizning obunangiz tugaganligi uchun yopiq kanaldan chiqarildingiz!"
                         )
-                        await bot.ban_chat_member(
-                            chat_id=private_channel.private_channel_id,
-                            user_id=telegram_id,
-                            until_date=until_date
-                        )
+                        try:
+                            await bot.ban_chat_member(
+                                chat_id=private_channel.private_channel_id,
+                                user_id=telegram_id,
+                                until_date=until_date
+                            )
+                        except e:
+                            logger.error(e)
+
+                        try:
+                            await bot.ban_chat_member(
+                                chat_id=GROUP_ID,
+                                user_id=telegram_id,
+                                until_date=until_date
+                            )
+                        except TelegramForbiddenError:
+                            logger.error(f"User not found")
+
                         user.is_subscribed = False
                         await user.asave()
                         logger.info(f"Final removal: User {telegram_id} - no card")
@@ -207,11 +252,25 @@ async def _kick_unpaid_users():
                                 message = "To'lov amalga oshmadi. Yopiq kanaldan chiqarildingiz!"
 
                             await bot.send_message(telegram_id, message)
-                            await bot.ban_chat_member(
-                                chat_id=private_channel.private_channel_id,
-                                user_id=telegram_id,
-                                until_date=until_date
-                            )
+
+                            try:
+                                await bot.ban_chat_member(
+                                    chat_id=private_channel.private_channel_id,
+                                    user_id=telegram_id,
+                                    until_date=until_date
+                                )
+                            except e:
+                                logger.error(e)
+
+                            try:
+                                await bot.ban_chat_member(
+                                    chat_id=GROUP_ID,
+                                    user_id=telegram_id,
+                                    until_date=until_date
+                                )
+                            except TelegramForbiddenError:
+                                logger.error(f"User not found")
+
                             user.is_subscribed = False
                             await user.asave()
                             logger.info(f"Final removal: User {telegram_id} after failed second attempt")
