@@ -483,6 +483,7 @@ async def handle_make_payment(callback: types.CallbackQuery, state: FSMContext):
     await order.asave()
 
     user.is_auto_subscribe = True
+    user.is_subscribed = True
 
     if user.subscription_start_date is None:
         user.subscription_start_date = timezone.now().date()
