@@ -49,7 +49,7 @@ services:
     volumes:
       - cdn_volume_prod:/app/cdn/
     ports:
-      - "127.0.0.1:8005:8000"
+      - "8005:8000"
     depends_on:
       db_prod:
         condition: service_healthy
