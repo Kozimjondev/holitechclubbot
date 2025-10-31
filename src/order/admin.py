@@ -19,7 +19,9 @@ class UserCourseSubscriptionAdmin(admin.ModelAdmin):
 
 @admin.register(Order)
 class OrderAdmin(admin.ModelAdmin):
-    list_display = ('user', 'course', 'amount', 'created_at')
+    list_display = ('user', 'course', 'amount', 'created_at', 'status')
+    list_filter = ('status', 'created_at',)
+    search_fields = ('user__telegram_id',)
     list_display_links = ('amount', 'user')
 
 
