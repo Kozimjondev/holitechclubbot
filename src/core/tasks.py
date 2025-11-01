@@ -287,7 +287,7 @@ async def _kick_unpaid_users():
         logger.error(f"Error in _kick_unpaid_users: {e}")
 
 
-async def send_membership_expire_notification():
+async def _send_membership_expire_notification():
     """Send notifications to users about subscription expiration"""
     try:
         three_days_before = date.today() + timedelta(days=3)
