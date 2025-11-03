@@ -85,7 +85,7 @@ async def _process_expired_subscriptions():
             return
 
         today = date.today()
-        expired_users = User.objects.filter(is_subscribed=True, subscription_end_date=today, is_foreigner=False)
+        expired_users = User.objects.filter(is_subscribed=True, subscription_end_date__lte=today, is_foreigner=False)
         if not await expired_users.aexists():
             return
 
@@ -105,8 +105,8 @@ async def _process_expired_subscriptions():
                             user_id=telegram_id,
                             until_date=until_date
                         )
-                    except e:
-                        logger.error(e)
+                    except TelegramForbiddenError:
+                        logger.error(f"User not found with {telegram_id}")
 
                     try:
                         await bot.ban_chat_member(
@@ -115,9 +115,10 @@ async def _process_expired_subscriptions():
                             until_date=until_date
                         )
                     except TelegramForbiddenError:
-                        logger.error(f"User not found")
+                        logger.error(f"User not found with {telegram_id}")
 
                     user.is_subscribed = False
+                    user.is_auto_subscribe = False
                     await user.asave()
                     logger.info(f"Removed non-auto-subscribe user {telegram_id}")
 
@@ -149,6 +150,7 @@ async def _process_expired_subscriptions():
                             logger.error(f"User not found")
 
                         user.is_subscribed = False
+                        user.is_auto_subscribe = False
                         await user.asave()
 
                         logger.info(f"Removed user {telegram_id} - no card available")
@@ -198,7 +200,7 @@ async def _kick_unpaid_users():
             return
 
         today = date.today()
-        expired_users = User.objects.filter(is_subscribed=True, subscription_end_date=today, is_foreigner=False)
+        expired_users = User.objects.filter(is_subscribed=True, subscription_end_date__lte=today, is_foreigner=False)
         if not await expired_users.aexists():
             return
 
@@ -221,8 +223,8 @@ async def _kick_unpaid_users():
                                 user_id=telegram_id,
                                 until_date=until_date
                             )
-                        except e:
-                            logger.error(e)
+                        except TelegramForbiddenError:
+                            logger.error(f"User not found with {telegram_id}")
 
                         try:
                             await bot.ban_chat_member(
@@ -231,9 +233,10 @@ async def _kick_unpaid_users():
                                 until_date=until_date
                             )
                         except TelegramForbiddenError:
-                            logger.error(f"User not found")
+                            logger.error(f"User not found with {telegram_id}")
 
                         user.is_subscribed = False
+                        user.is_auto_subscribe = False
                         await user.asave()
                         logger.info(f"Final removal: User {telegram_id} - no card")
                     else:
@@ -259,8 +262,8 @@ async def _kick_unpaid_users():
                                     user_id=telegram_id,
                                     until_date=until_date
                                 )
-                            except e:
-                                logger.error(e)
+                            except TelegramForbiddenError:
+                                logger.error(f"User not found with {telegram_id}")
 
                             try:
                                 await bot.ban_chat_member(
@@ -269,9 +272,10 @@ async def _kick_unpaid_users():
                                     until_date=until_date
                                 )
                             except TelegramForbiddenError:
-                                logger.error(f"User not found")
+                                logger.error(f"User not found with {telegram_id}")
 
                             user.is_subscribed = False
+                            user.is_auto_subscribe = False
                             await user.asave()
                             logger.info(f"Final removal: User {telegram_id} after failed second attempt")
 
