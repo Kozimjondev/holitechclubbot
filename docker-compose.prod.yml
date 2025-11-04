@@ -42,22 +42,28 @@ services:
       retries: 5
 
   payment_web:
-    container_name: payment_web
-    build: .
-    restart: unless-stopped
-    command: uvicorn config.asgi:application --host 0.0.0.0 --port 8000
-    volumes:
-      - cdn_volume_prod:/app/cdn/
-    ports:
-      - "127.0.0.1:8005:8000"
-    depends_on:
-      db_prod:
-        condition: service_healthy
-      redis_prod:
-        condition: service_healthy
-    networks:
-      - payment_bot_net
-    env_file: .env
+      container_name: payment_web
+      build: .
+      restart: unless-stopped
+      command: uvicorn config.asgi:application --host 0.0.0.0 --port 8000
+      volumes:
+        - cdn_volume_prod:/app/cdn/
+      ports:
+        - "127.0.0.1:8005:8000"
+      depends_on:
+        db_prod:
+          condition: service_healthy
+        redis_prod:
+          condition: service_healthy
+      networks:
+        - payment_bot_net
+      env_file: .env
+      healthcheck:
+        test: ["CMD-SHELL", "curl -f http://localhost:8000/ || exit 1"]
+        interval: 10s
+        timeout: 5s
+        retries: 5
+        start_period: 30s
 
   nginx:
     container_name: nginx
@@ -71,7 +77,8 @@ services:
       - cdn_volume_prod:/app/cdn/
       - ./nginx/nginx.bot.conf:/etc/nginx/conf.d/default.conf
     depends_on:
-      - payment_web
+      payment_web:
+        condition: service_healthy
 
   celery_worker:
     container_name: celery_worker
