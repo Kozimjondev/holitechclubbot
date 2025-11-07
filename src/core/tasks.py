@@ -7,7 +7,7 @@ from celery import shared_task
 from django.utils import timezone
 from django.conf import settings
 import aiohttp
-import asyncio
+from asgiref.sync import async_to_sync
 
 from bot.functions import generate_auth_header
 from order.models import Course, PrivateChannel, Order
@@ -406,16 +406,16 @@ async def _send_membership_expire_notification():
 @shared_task
 def process_expired_subscriptions():
     """Celery task: First payment attempt"""
-    asyncio.run(_process_expired_subscriptions())
+    async_to_sync(_process_expired_subscriptions)()
 
 
 @shared_task
 def kick_unpaid_users():
     """Celery task: Second payment attempt and kick"""
-    asyncio.run(_kick_unpaid_users())
+    async_to_sync(_kick_unpaid_users)()
 
 
 @shared_task
 def send_membership_expire_notification():
     """Celery task: Send subscription expiration notifications"""
-    asyncio.run(_send_membership_expire_notification())
+    async_to_sync(_send_membership_expire_notification)()
