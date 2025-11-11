@@ -57,7 +57,7 @@ def get_main_menu(language: str = 'uz'):
     # )
     builder.button(
         text="Savol berish",
-        url="https://t.me/yolda_korishamiz_support"
+        url="https://t.me/orif_aka"
     )
 
     builder.adjust(1)
