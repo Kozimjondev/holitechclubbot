@@ -4,7 +4,7 @@ import time
 from datetime import timedelta, datetime
 
 import aiohttp
-from aiogram import F
+from aiogram import F, Bot
 from aiogram import Router, types
 from aiogram.exceptions import TelegramBadRequest, TelegramRetryAfter
 from aiogram.filters import StateFilter
@@ -25,6 +25,8 @@ from bot.keyboards import get_main_menu, get_menu_back_keyboard, back_menu_butto
 from core.utils.constants import CONSTANTS
 from order.models import Course, Order, PrivateChannel, Transaction
 from users.models import User, UserCard
+from bot.tasks import send_video_to_users_task, copy_video_to_users_task
+
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +131,51 @@ async def cmd_cancel(message: types.Message, state: FSMContext):
         builder.adjust(1)
         await message.answer(text, parse_mode="Markdown", reply_markup=builder.as_markup())
         return
+
+
+@router.message(Command("admin"))
+async def admin_panel(message: types.Message):
+    """Admin panel - accessible only to staff"""
+    user_id = message.from_user.id
+
+    user_lang = cache.get(f"user_lang:{user_id}")
+    if not user_lang:
+        user = await User.objects.aget(telegram_id=user_id)
+        user_lang = user.language
+        cache.set(f"user_lang:{user_id}", user_lang, timeout=None)
+    else:
+        user = await User.objects.filter(telegram_id=user_id).afirst()
+
+    if not user.is_staff:
+        if user.language == CONSTANTS.LANGUAGES.RU:
+            await message.answer("❌ У вас нет доступа к панели администратора.")
+        else:
+            await message.answer("❌ Sizda admin paneliga kirish huquqi yo'q.")
+        return
+    else:
+        keyboard = InlineKeyboardBuilder()
+
+        if user_lang == CONSTANTS.LANGUAGES.RU:
+            keyboard.button(text="📹 Отправить мотивационное видео", callback_data="send_motivation_video")
+            keyboard.button(text="📝 Отправить мотивационный текст", callback_data="send_motivation_text")
+            keyboard.button(text="🔙 Назад", callback_data="main_menu")
+
+            text = (
+                "👨‍💼 Панель администратора - Мотивация\n\n"
+                "Выберите тип контента для отправки всем пользователям:"
+            )
+        else:  # Uzbek
+            keyboard.button(text="📹 Motivatsion video yuborish", callback_data="send_motivation_video")
+            keyboard.button(text="📝 Motivatsion matn yuborish", callback_data="send_motivation_text")
+            keyboard.button(text="🔙 Orqaga", callback_data="main_menu")
+
+            text = (
+                "👨‍💼 Admin paneli - Motivatsiya\n\n"
+                "Barcha foydalanuvchilarga yuborish uchun kontent turini tanlang:"
+            )
+
+        keyboard.adjust(1)
+        await message.answer(text, reply_markup=keyboard.as_markup())
 
 
 @router.message(UserStates.name)
@@ -848,68 +895,6 @@ async def return_to_main_menu(callback: types.CallbackQuery, state: FSMContext):
     await callback.message.edit_text(message_text, reply_markup=get_main_menu())
 
 
-@router.callback_query(F.data.in_(["motivation"]))
-async def handle_motivation(callback: types.CallbackQuery, state: FSMContext):
-    """Process inline keyboard button presses"""
-    await callback.answer()
-
-    user_id = callback.from_user.id
-
-    # Get user language
-    user_lang = cache.get(f"user_lang:{user_id}")
-    if not user_lang:
-        user = await User.objects.aget(telegram_id=user_id)
-        user_lang = user.language
-        cache.set(f"user_lang:{user_id}", user_lang, timeout=None)
-    else:
-        user = await User.objects.filter(telegram_id=user_id).afirst()
-
-    if user.is_staff:
-        # Staff menu - options to send motivation content
-        keyboard = InlineKeyboardBuilder()
-
-        if user_lang == CONSTANTS.LANGUAGES.RU:
-            keyboard.button(text="📹 Отправить мотивационное видео", callback_data="send_motivation_video")
-            keyboard.button(text="📝 Отправить мотивационный текст", callback_data="send_motivation_text")
-            keyboard.button(text="🔙 Назад", callback_data="main_menu")
-
-            text = (
-                "👨‍💼 Панель администратора - Мотивация\n\n"
-                "Выберите тип контента для отправки всем пользователям:"
-            )
-        else:  # Uzbek
-            keyboard.button(text="📹 Motivatsion video yuborish", callback_data="send_motivation_video")
-            keyboard.button(text="📝 Motivatsion matn yuborish", callback_data="send_motivation_text")
-            keyboard.button(text="🔙 Orqaga", callback_data="main_menu")
-
-            text = (
-                "👨‍💼 Admin paneli - Motivatsiya\n\n"
-                "Barcha foydalanuvchilarga yuborish uchun kontent turini tanlang:"
-            )
-
-        keyboard.adjust(1)
-        await callback.message.edit_text(text, reply_markup=keyboard.as_markup())
-
-    else:
-        # Regular user - show motivation content
-        if user_lang == CONSTANTS.LANGUAGES.RU:
-            text = (
-                "🎥 Мотивационные материалы\n\n"
-                "Здесь вы найдете вдохновляющие видео успешных спикеров, "
-                "которые помогут вам поверить в свои силы и преодолеть страх публичных выступлений.\n\n"
-                "Регулярно посещайте этот раздел для поддержания мотивации!"
-            )
-        else:  # Uzbek
-            text = (
-                "🎥 Motivatsion materiallar\n\n"
-                "Bu yerda siz muvaffaqiyatli notiqlarning ilhomlantiruvchi videolarini topasiz, "
-                "ular sizga o'z kuchingizga ishonish va omma oldida nutq so'zlashdagi qo'rquvni yengishga yordam beradi.\n\n"
-                "Motivatsiyani saqlab qolish uchun bu bo'limga tez-tez tashrif buyuring!"
-            )
-
-        await callback.message.edit_text(text, reply_markup=get_menu_back_keyboard(user_lang))
-
-
 # Handler for sending motivation video
 @router.callback_query(F.data == "send_motivation_video")
 async def send_motivation_video_prompt(callback: types.CallbackQuery, state: FSMContext):
@@ -946,39 +931,51 @@ async def send_motivation_text_prompt(callback: types.CallbackQuery, state: FSMC
     await callback.message.edit_text(text, reply_markup=get_menu_back_keyboard(user_lang))
 
 
-# Handler for receiving motivation video from staff
-@router.message(StateFilter("waiting_motivation_video"), F.video)
-async def receive_motivation_video(message: types.Message, state: FSMContext):
-    """Send motivation video to all users"""
+@router.message(StateFilter("waiting_motivation_video"), F.video | F.forward_from)
+async def receive_motivation_video(message: types.Message, state: FSMContext, bot: Bot):
+    """
+    Handle video upload or forward
+    - If forwarded: use copy_message (removes forward tag)
+    - If uploaded: use send_video (with file_id)
+    """
     await state.clear()
 
     user_id = message.from_user.id
     user_lang = cache.get(f"user_lang:{user_id}")
 
-    # Get all users
-    users = User.objects.all()
-    sent_count = 0
-    failed_count = 0
-
-    async for user in users:
-        try:
-            await message.bot.send_video(
-                chat_id=user.telegram_id,
-                video=message.video.file_id,
-                caption="🎥 Motivatsion video" if user.language == CONSTANTS.LANGUAGES.UZ else "🎥 Мотивационное видео"
-            )
-            sent_count += 1
-        except Exception as e:
-            failed_count += 1
-            continue
-
+    # Confirm receipt
     if user_lang == CONSTANTS.LANGUAGES.RU:
-        result_text = f"✅ Видео отправлено!\n\nУспешно: {sent_count}\nНе удалось: {failed_count}"
+        await message.answer(
+            "✅ Видео получено!\n"
+            "📤 Отправка началась...\n\n"
+            "Вы получите уведомление по завершении."
+        )
     else:
-        result_text = f"✅ Video yuborildi!\n\nMuvaffaqiyatli: {sent_count}\nXatolik: {failed_count}"
+        await message.answer(
+            "✅ Video qabul qilindi!\n"
+            "📤 Yuborish boshlandi...\n\n"
+            "Tugagach xabar beramiz."
+        )
 
-    await message.answer(result_text, reply_markup=get_main_menu())
-
+    # ✅ Check if message is forwarded
+    if message.forward_from or message.forward_from_chat or message.forward_date:
+        # Forwarded video - use copy_message to remove forward tag
+        await asyncio.to_thread(
+            copy_video_to_users_task.delay,
+            from_chat_id=message.chat.id,
+            message_id=message.message_id,
+            bot_token=bot.token,
+            admin_chat_id=message.chat.id
+        )
+    else:
+        # Uploaded video - use send_video with file_id
+        await asyncio.to_thread(
+            send_video_to_users_task.delay,
+            video_file_id=message.video.file_id,
+            caption=message.caption,
+            bot_token=bot.token,
+            admin_chat_id=message.chat.id
+        )
 
 # Handler for receiving motivation text from staff
 @router.message(StateFilter("waiting_motivation_text"), F.text)
