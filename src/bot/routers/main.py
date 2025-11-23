@@ -95,7 +95,8 @@ async def cmd_cancel(message: types.Message, state: FSMContext):
 
         text = (
             f"⚠️ Obunani bekor qilishga ishonchingiz komilmi?\n\n"
-            f"Obunani bekor qilmoqchi bo'lsangiz {user.subscription_end_date.strftime('%Y-%m-%d')} sanadan yopiq kanaldan chiqarib yuborilasiz.\n"
+            f"Obunani bekor qilmoqchi bo'lsangiz {user.subscription_end_date.strftime('%Y-%m-%d')} sanadan yopiq kanal"
+            " yoki guruhdan chiqarib yuborilasiz.\n"
             f"Botga ulangan kartangiz ham o`chirib yuboriladi.\n"
             f"Obunani bekor qilasizmi?"
         )
@@ -307,16 +308,16 @@ async def handle_offer_accepted(callback: types.CallbackQuery, state: FSMContext
         await callback.message.edit_text("Hozircha hech qanday kurs mavjud emas.")
         return
 
-    text = "💰 *Yopiq kanal uchun kurslar (price list):*\n\n"
+    text = "💰 *Yopiq kanal yoki guruh uchun kurslar:*\n\n"
     keyboard_buttons = []
 
     for course in courses:
-        text += f"📌 *{course.name or 'Nomsiz kurs'}*\n"
-        text += f"💵 Narx: {course.amount} so'm\n"
+        text += f"🎓 *{course.name or 'Nomsiz kurs'}*\n"
+        text += f"💰 Narx: {course.amount} so'm\n"
         if course.period:
-            text += f"🕒 Davomiylik: {course.period} kun\n"
+            text += f"⏳ Davomiylik: {course.period} kun\n"
         if course.description:
-            text += f"📝 {course.description}\n"
+            text += f"🧾 {course.description}\n"
         text += "\n"
 
         keyboard_buttons.append([
@@ -358,7 +359,7 @@ async def handle_payment_type(callback: types.CallbackQuery, state: FSMContext):
     keyboard.adjust(1)
 
     await callback.message.edit_text(
-        "📢 *Yopiq kanalga obuna bo'lish narxlari:*\n"
+        "📢 *Yopiq kanal yoki guruhga obuna bo'lish narxlari:*\n"
         f"*{course.name} – {course.amount} so'm*\n\n"
         "🔔 *To'lov turlari haqida:*\n"
         "▫️ *Click to'lov* — bir martalik to'lov. Obuna muddati tugagach, avtomatik uzaytirilmaydi va "
@@ -461,9 +462,9 @@ async def handle_course_subscription(callback: types.CallbackQuery, state: FSMCo
     keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_buttons)
 
     await callback.message.edit_text(
-        "📢 *Yopiq kanalgа obuna bo‘lish narxi:*\n"
-        f"*1 oylik – narxi {course.amount} so‘m*\n\n"
-        "🕒 *To‘lov qilingandan so‘ng har 30 kun ichida obuna uchun to‘lovi avtomatik tarzda yechiladi.*\n"
+        "📢 *Yopiq kanal yoki guruhga obuna bo‘lish narxi:*\n"
+        f"* {course.name}  – narxi {course.amount} so‘m*\n\n"
+        f"🕒 *To‘lov qilingandan so‘ng har {course.period} kun ichida obuna uchun to‘lovi avtomatik tarzda yechiladi.*\n"
         "To‘lovni vaqtida qilmagan foydalanuvchi kanaldan chiqarib yuboriladi.\n\n"
         "💳 *Kiritilgan kartalar ro'yxati.*\n"
         "*To‘lov uchun kartani tanlang:*",
@@ -577,7 +578,7 @@ async def handle_make_payment(callback: types.CallbackQuery, state: FSMContext):
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
-                text="Yopiq Kanalga ulanish",
+                text="Yopiq Kanal yoki guruhga ulanish",
                 url=invite_link.invite_link
             )
         ],
@@ -591,13 +592,13 @@ async def handle_make_payment(callback: types.CallbackQuery, state: FSMContext):
     ])
 
     await callback.message.edit_text(
-        "✅ *Tabriklaymiz!* Siz *\"To'xtab qolma atlet\"* kanali a'zosiga aylandingiz! 💪\n\n"
-        "Sizning 1 oylik to'lovingiz muvaffaqiyatli qabul qilindi — endi yopiq kanal siz uchun ochiq!\n\n"
-        "👉 Avvalo pastdagi havolani bosib kanalga o'ting.\n"
-        "🔔 So'ngra kanalda *\"Подписаться\"* tugmasini bosib, a'zo bo'ling.\n\n"
+        "✅ *Tabriklaymiz!*\n\n"
+        f"Sizning {course.name} to'lovingiz muvaffaqiyatli qabul qilindi — endi yopiq kanal yoki guruh siz uchun ochiq!\n\n"
+        "👉 Avvalo pastdagi havolani bosib kanalga yoki guruhga o'ting.\n"
+        "🔔 So'ngra kanalda yoki guruhda *\"Подписаться\"* tugmasini bosib, a'zo bo'ling.\n\n"
         "⚡️ *Eslatma:* tugma faqat 1 soat davomida faol!\n"
         "🔁 Agar havola ishlamasa, birozdan so'ng yana urinib ko'ring.\n\n"
-        "👇 Pastdagi *\"Yopiq kanalga o'tish\"* tugmasini bosing va yangi bosqichni boshlang!",
+        "👇 Pastdagi *\"Yopiq kanal yoki guruhga o'tish\"* tugmasini bosing va yangi bosqichni boshlang!",
         parse_mode="Markdown",
         reply_markup=keyboard
     )
@@ -825,7 +826,7 @@ async def handle_cancel_membership(callback: types.CallbackQuery, state: FSMCont
 
         text = (
             f"⚠️ Obunani bekor qilishga ishonchingiz komilmi?\n\n"
-            f"Obunani bekor qilmoqchi bo'lsangiz {user.subscription_end_date.strftime('%Y-%m-%d')} sanadan yopiq kanaldan chiqarib yuborilasiz.\n"
+            f"Obunani bekor qilmoqchi bo'lsangiz {user.subscription_end_date.strftime('%Y-%m-%d')} sanadan yopiq kanal yoki guruhdan chiqarib yuborilasiz.\n"
             f"Botga ulangan kartangiz ham o`chirib yuboriladi.\n"
             f"Obunani bekor qilasizmi?"
         )

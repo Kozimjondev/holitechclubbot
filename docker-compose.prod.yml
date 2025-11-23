@@ -5,7 +5,7 @@ services:
     restart: unless-stopped
     env_file: .env
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"
     networks:
       - payment_bot_net
     volumes:
@@ -49,7 +49,7 @@ services:
       volumes:
         - cdn_volume_prod:/app/cdn/
       ports:
-        - "127.0.0.1:8005:8000"
+        - "127.0.0.1:8000:8000"  # Changed from 8005 to 8000 for clarity
       depends_on:
         db_prod:
           condition: service_healthy
@@ -64,21 +64,6 @@ services:
         timeout: 5s
         retries: 5
         start_period: 30s
-
-  nginx:
-    container_name: nginx
-    image: nginx:1.25
-    restart: always
-    ports:
-      - "127.0.0.1:1040:1040"
-    networks:
-      - payment_bot_net
-    volumes:
-      - cdn_volume_prod:/app/cdn/
-      - ./nginx/nginx.bot.conf:/etc/nginx/conf.d/default.conf
-    depends_on:
-      payment_web:
-        condition: service_healthy
 
   celery_worker:
     container_name: celery_worker
