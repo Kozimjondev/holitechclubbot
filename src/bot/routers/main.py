@@ -32,8 +32,6 @@ logger = logging.getLogger(__name__)
 
 router = Router()
 
-COURSE_CHANNEL_ID = -1002675291780
-
 
 def get_back_keyboard():
     """Create back to main menu keyboard"""
@@ -213,27 +211,39 @@ async def handle_user_phone(message: types.Message, state: FSMContext):
 @router.callback_query(lambda c: c.data == 'subscription_info')
 async def handle_subscription_info(callback_query: CallbackQuery, state: FSMContext):
     text = (
-        "*Assalomu alaykum!*\n"
-        "*Xush kelibsiz! 👋*\n\n"
+        "Assalomu alaykum!\n"
+        "Xush kelibsiz! 👋\n\n"
 
         "Bu yerda siz:\n"
-        "✅ Boshlang‘ich sport ko‘nikmalarini o‘rganasiz\n"
-        "✅ To‘g‘ri ovqatlanish haqida foydali ma’lumotlarga ega bo‘lasiz\n"
-        "✅ Jonli efirda savollarga javoblar\n\n"
+        "✅ YouTube’da o‘sish uchun zarur bo‘lgan PRO bilimlarni o‘rganasiz\n"
+        "✅ Har kuni amaliy foydali maslahatlar olasiz\n"
+        "✅ O‘z kanalingiz bo‘yicha savollarga aniq javob topasiz\n\n"
 
-        "📆 *Oyiga kamida 2 marotaba* barcha ishtirokchilar bilan jonli savol-javob efirlari tashkil qilinadi. Bunda o‘zingizni qiynayotgan barcha savollaringiz hamda muammolaringizga yechim olishingiz mumkin bo‘ladi.\n\n"
+        "📆 Har hafta 1 ta PRO videodars joylanadi. Unda YouTube’da muvaffaqiyatga erishish "
+        "uchun kerak bo‘ladigan barcha bosqichlar yoritiladi.\n\n"
 
-        "✅ Qo‘shimchasiga — o‘z sohasida ekspert bo‘lgan *urolog*, *androlog* va *endokrinolog* shifokorlardan sog‘lom turmush tarzi va salomatlik bo‘yicha kerakli tavsiyalar olasiz!\n"
-        "🧠 Va albatta miyani rivojlantirish bo‘yicha ham video darslar joylangan!\n\n"
+        "Bu darslarda siz:\n\n"
+        "• YouTube asoslari (algoritm, qidiruv, tavsiyalar)\n"
+        "• Kanal sozlash va optimizatsiya\n"
+        "• Kontent strategiyasi tuzish\n"
+        "• Monetizatsiya tizimi\n"
+        "• Montaj (CapCut Desktop + AI)\n"
+        "kabi muhim yo‘nalishlarni puxta o‘rganasiz.\n\n"
 
-        "🎁 Shuningdek, sizni bonus darslar ham kutmoqda!\n"
-        "🤓 Har oy sizning qiziqishlaringiz asosida maxsus podkastlar tayyorlaymiz.\n\n"
+        "🧠 Qo‘shimchasiga — YouTube bo‘yicha minglab o‘rganilgan tajribalar, real misollar "
+        "va eng samarali usullar siz uchun yoritib boriladi.\n\n"
 
-        "📅 *Mashqlar haftalarga bo‘lingan:*\n"
-        "Haftasiga 3 martalik video darsliklar joylangan.\n\n"
+        "🎁 Shuningdek, sizni haftalik bonus darslar ham kutmoqda!\n"
+        "Har hafta — daromadli YouTube yo‘nalishlari va ularning mantig‘i bo‘yicha maxsus "
+        "materiallar taqdim etiladi.\n\n"
 
-        "📍 *1-hafta* – butun tanani uyg‘otishga qaratilgan umumiy mashqlar (aktivlashtiruvchi harakatlar)\n"
-        "📍 *2-hafta* va undan keyin – tananing ma’lum mushak guruhlariga yo‘naltirilgan maxsus mashqlar\n\n"
+        "🤓 Bundan tashqari:\n"
+        "• Telegram’da shaxsiy support\n"
+        "• Zoom/Voice chat konsultatsiya\n\n"
+
+        "📅 Darslar izchil tarzda bo‘lingan:\n"
+        "Har hafta — bitta asosiy yo‘nalish bo‘yicha videodars\n"
+        "Har kuni — yangi amaliy ma’lumotlar\n"
     )
 
     await callback_query.message.edit_text(
@@ -343,17 +353,19 @@ async def handle_payment_type(callback: types.CallbackQuery, state: FSMContext):
     keyboard.button(text="Click tolov", callback_data=f"click_payment_{course_id}")
 
     keyboard.button(text="Uzcard/Humo", callback_data=f"subscribe_course_{course_id}")
-    keyboard.button(text="Chet eldan", url='https://t.me/tribute/app?startapp=sxww')
+    # keyboard.button(text="Chet eldan", url='https://t.me/tribute/app?startapp=sxww')
     keyboard.button(text="Orqaga", callback_data="active_courses")
     keyboard.adjust(1)
 
     await callback.message.edit_text(
-        "📢 *Yopiq kanalga obuna bo'lish narxi:*\n"
-        f"*1 oylik – narxi {course.amount} so'm*\n"
-        "*Chet el uchun – 5€*\n\n"
-        "🕒 *To'lov qilingandan so'ng, har 30 kunda obuna uchun to'lov avtomatik tarzda yechiladi.*\n"
-        "*To'lovni vaqtida qilmagan foydalanuvchi kanaldan chiqarib yuboriladi.*\n\n"
-        "💳 *To'lov uchun usulni tanlang:*",
+        "📢 *Yopiq kanalga obuna bo'lish narxlari:*\n"
+        f"*{course.name} – {course.amount} so'm*\n\n"
+        "🔔 *To'lov turlari haqida:*\n"
+        "▫️ *Click to'lov* — bir martalik to'lov. Obuna muddati tugagach, avtomatik uzaytirilmaydi va "
+        "foydalanuvchi guruh yoki kanaldan chiqariladi. Obunani uzaytirish uchun yana qayta tolov qilish talab etiladi.\n"
+        f"▫️ *Uzcard/Humo* — avtomatik to'lov. Har {course.period} kunda to'lov o'zi yechiladi va foydalanuvchi "
+        f"guruh yoki kanalda qoladi. Avtomat tolovni /cancel tugmasini bosish orqali amallarni bajarib bekor qilish mumkin.\n\n"
+        "💳 *To'lov usulini tanlang:*",
         reply_markup=keyboard.as_markup(),
         parse_mode="Markdown"
     )

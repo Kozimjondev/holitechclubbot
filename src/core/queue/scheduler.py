@@ -82,88 +82,89 @@ async def remove_user_from_channels():
     try:
         until_date = int(time.time()) + 60
 
-        course = await Course.objects.afirst()
-        private_channel = await PrivateChannel.objects.filter(course_id=course.id).afirst()
+        courses = Course.objects.all()
+        async for course in courses:
+            private_channel = await PrivateChannel.objects.filter(course_id=course.id).afirst()
 
-        if not course or not private_channel:
-            logger.error("Course or private channel not found")
-            return
+            if not course or not private_channel:
+                logger.error("Course or private channel not found")
+                return
 
-        today = date.today()
-        expired_users = User.objects.filter(is_subscribed=True, subscription_end_date=today, is_foreigner=False)
-        if not await expired_users.aexists():
-            return
+            today = date.today()
+            expired_users = User.objects.filter(is_subscribed=True, subscription_end_date=today, is_foreigner=False)
+            if not await expired_users.aexists():
+                return
 
-        processed_count = 0
-        async for user in expired_users:
-            try:
-                telegram_id = user.telegram_id
+            processed_count = 0
+            async for user in expired_users:
+                try:
+                    telegram_id = user.telegram_id
 
-                if not user.is_auto_subscribe:
-                    # Users without auto-subscribe: kick immediately
-                    await bot.send_message(
-                        telegram_id,
-                        "Sizning obunangiz tugaganligi uchun yopiq kanaldan chiqarildingiz!"
-                    )
-
-                    await bot.ban_chat_member(
-                        chat_id=private_channel.private_channel_id,
-                        user_id=telegram_id,
-                        until_date=until_date
-                    )
-
-                    user.is_subscribed = False
-                    await user.asave()
-                    logger.info(f"Removed non-auto-subscribe user {telegram_id}")
-
-                else:
-                    user_card = await UserCard.objects.filter(user_id=telegram_id).afirst()
-
-                    if not user_card:
-                        # No card available: kick immediately
+                    if not user.is_auto_subscribe:
+                        # Users without auto-subscribe: kick immediately
                         await bot.send_message(
                             telegram_id,
                             "Sizning obunangiz tugaganligi uchun yopiq kanaldan chiqarildingiz!"
                         )
+
                         await bot.ban_chat_member(
                             chat_id=private_channel.private_channel_id,
                             user_id=telegram_id,
                             until_date=until_date
                         )
+
                         user.is_subscribed = False
                         await user.asave()
-                        logger.info(f"Removed user {telegram_id} - no card available")
+                        logger.info(f"Removed non-auto-subscribe user {telegram_id}")
+
                     else:
-                        # Try automatic payment
-                        success, error_type = await process_auto_payment(user, course, user_card)
+                        user_card = await UserCard.objects.filter(user_id=telegram_id).afirst()
 
-                        if success:
-                            await bot.send_message(telegram_id, "Kartadan pul yechib olindi. Obuna uzaytirildi.")
-                            logger.info(f"Successfully renewed subscription for user {telegram_id}")
+                        if not user_card:
+                            # No card available: kick immediately
+                            await bot.send_message(
+                                telegram_id,
+                                "Sizning obunangiz tugaganligi uchun yopiq kanaldan chiqarildingiz!"
+                            )
+                            await bot.ban_chat_member(
+                                chat_id=private_channel.private_channel_id,
+                                user_id=telegram_id,
+                                until_date=until_date
+                            )
+                            user.is_subscribed = False
+                            await user.asave()
+                            logger.info(f"Removed user {telegram_id} - no card available")
                         else:
-                            # Payment failed: send warning, keep user for 1 hour retry
-                            if error_type == "insufficient_funds":
-                                message = (
-                                    "Obunani avtomat uzaytirish uchun kartada yetarli mablag` mavjud emas. "
-                                    "1 soatdan so'ng qayta yechishga urinish bo'ladi. Hisobingizni to'ldiring!"
-                                )
+                            # Try automatic payment
+                            success, error_type = await process_auto_payment(user, course, user_card)
+
+                            if success:
+                                await bot.send_message(telegram_id, "Kartadan pul yechib olindi. Obuna uzaytirildi.")
+                                logger.info(f"Successfully renewed subscription for user {telegram_id}")
                             else:
-                                message = (
-                                    "To'lov yechib olishda xatolik yuz berdi. "
-                                    "1 soatdan so'ng qayta yechishga urinish bo'ladi."
-                                )
+                                # Payment failed: send warning, keep user for 1 hour retry
+                                if error_type == "insufficient_funds":
+                                    message = (
+                                        "Obunani avtomat uzaytirish uchun kartada yetarli mablag` mavjud emas. "
+                                        "1 soatdan so'ng qayta yechishga urinish bo'ladi. Hisobingizni to'ldiring!"
+                                    )
+                                else:
+                                    message = (
+                                        "To'lov yechib olishda xatolik yuz berdi. "
+                                        "1 soatdan so'ng qayta yechishga urinish bo'ladi."
+                                    )
 
-                            await bot.send_message(telegram_id, message)
-                            logger.warning(f"Payment failed for user {telegram_id}, will retry in 1 hour")
-                            # Don't change subscription status - keep for retry
+                                await bot.send_message(telegram_id, message)
+                                logger.warning(f"Payment failed for user {telegram_id}, will retry in 1 hour")
+                                # Don't change subscription status - keep for retry
 
-                processed_count += 1
+                    processed_count += 1
 
-            except Exception as e:
-                logger.error(f"Error processing user {user.telegram_id}: {e}")
-                continue
+                except Exception as e:
+                    logger.error(f"Error processing user {user.telegram_id}: {e}")
+                    continue
 
-        logger.info(f"First attempt: Processed {processed_count} expired subscriptions")
+            logger.info(f"First attempt: Processed {processed_count} expired subscriptions")
 
     except Exception as e:
         logger.error(f"Error in remove_user_from_channels: {e}")
@@ -186,61 +187,36 @@ async def kick_unpaid_users_handler():
     try:
         until_date = int(time.time()) + 60
 
-        course = await Course.objects.afirst()
-        private_channel = await PrivateChannel.objects.filter(course_id=course.id).afirst()
+        courses = Course.objects.all()
+        async for course in courses:
+            private_channel = await PrivateChannel.objects.filter(course_id=course.id).afirst()
 
-        if not course or not private_channel:
-            logger.error("Course or private channel not found")
-            return
+            if not course or not private_channel:
+                logger.error("Course or private channel not found")
+                return
 
-        today = date.today()
-        # Find users whose subscription expired today and are still subscribed
-        # (these are users from the first attempt who failed payment)
-        expired_users = User.objects.filter(is_subscribed=True, subscription_end_date=today, is_foreigner=False)
-        if not await expired_users.aexists():
-            return
+            today = date.today()
+            # Find users whose subscription expired today and are still subscribed
+            # (these are users from the first attempt who failed payment)
+            expired_users = User.objects.filter(is_subscribed=True, subscription_end_date=today, is_foreigner=False)
+            if not await expired_users.aexists():
+                return
 
-        processed_count = 0
-        async for user in expired_users:
-            try:
-                telegram_id = user.telegram_id
+            processed_count = 0
+            async for user in expired_users:
+                try:
+                    telegram_id = user.telegram_id
 
-                # Only process auto-subscribe users (non-auto users were already kicked in first attempt)
-                if user.is_auto_subscribe:
-                    user_card = await UserCard.objects.filter(user_id=telegram_id).afirst()
+                    # Only process auto-subscribe users (non-auto users were already kicked in first attempt)
+                    if user.is_auto_subscribe:
+                        user_card = await UserCard.objects.filter(user_id=telegram_id).afirst()
 
-                    if not user_card:
-                        # No card: kick user
-                        await bot.send_message(
-                            telegram_id,
-                            "Sizning obunangiz tugaganligi uchun yopiq kanaldan chiqarildingiz!"
-                        )
-                        await bot.ban_chat_member(
-                            chat_id=private_channel.private_channel_id,
-                            user_id=telegram_id,
-                            until_date=until_date
-                        )
-                        user.is_subscribed = False
-                        await user.asave()
-                        logger.info(f"Final removal: User {telegram_id} - no card")
-                    else:
-                        # Second payment attempt
-                        success, error_type = await process_auto_payment(user, course, user_card)
-
-                        if success:
-                            await bot.send_message(telegram_id, "Kartadan pul yechib olindi. Obuna uzaytirildi.")
-                            logger.info(f"Second attempt successful for user {telegram_id}")
-                        else:
-                            # Second attempt failed: kick user
-                            if error_type == "insufficient_funds":
-                                message = (
-                                    "Obunani avtomat uzaytirish uchun kartada yetarli mablag` mavjud emas. "
-                                    "Yopiq kanaldan chiqarildingiz!"
-                                )
-                            else:
-                                message = "To'lov amalga oshmadi. Yopiq kanaldan chiqarildingiz!"
-
-                            await bot.send_message(telegram_id, message)
+                        if not user_card:
+                            # No card: kick user
+                            await bot.send_message(
+                                telegram_id,
+                                "Sizning obunangiz tugaganligi uchun yopiq kanaldan chiqarildingiz!"
+                            )
                             await bot.ban_chat_member(
                                 chat_id=private_channel.private_channel_id,
                                 user_id=telegram_id,
@@ -248,15 +224,41 @@ async def kick_unpaid_users_handler():
                             )
                             user.is_subscribed = False
                             await user.asave()
-                            logger.info(f"Final removal: User {telegram_id} after failed second attempt")
+                            logger.info(f"Final removal: User {telegram_id} - no card")
+                        else:
+                            # Second payment attempt
+                            success, error_type = await process_auto_payment(user, course, user_card)
 
-                processed_count += 1
+                            if success:
+                                await bot.send_message(telegram_id, "Kartadan pul yechib olindi. Obuna uzaytirildi.")
+                                logger.info(f"Second attempt successful for user {telegram_id}")
+                            else:
+                                # Second attempt failed: kick user
+                                if error_type == "insufficient_funds":
+                                    message = (
+                                        "Obunani avtomat uzaytirish uchun kartada yetarli mablag` mavjud emas. "
+                                        "Yopiq kanaldan chiqarildingiz!"
+                                    )
+                                else:
+                                    message = "To'lov amalga oshmadi. Yopiq kanaldan chiqarildingiz!"
 
-            except Exception as e:
-                logger.error(f"Error processing user {user.telegram_id} in second attempt: {e}")
-                continue
+                                await bot.send_message(telegram_id, message)
+                                await bot.ban_chat_member(
+                                    chat_id=private_channel.private_channel_id,
+                                    user_id=telegram_id,
+                                    until_date=until_date
+                                )
+                                user.is_subscribed = False
+                                await user.asave()
+                                logger.info(f"Final removal: User {telegram_id} after failed second attempt")
 
-        logger.info(f"Second attempt: Processed {processed_count} users")
+                    processed_count += 1
+
+                except Exception as e:
+                    logger.error(f"Error processing user {user.telegram_id} in second attempt: {e}")
+                    continue
+
+            logger.info(f"Second attempt: Processed {processed_count} users")
 
     except Exception as e:
         logger.error(f"Error in kick_unpaid_users_handler: {e}")

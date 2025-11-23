@@ -148,12 +148,11 @@ MEDIA_ROOT = BASE_DIR.parent / "cdn/media"
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 # Bot settings
-BOT_TOKEN = config('BOT_TOKEN')
+BOT_TOKEN = config('BOT_TOKEN', default='')
 LIFESPAN_CONTEXT = 'config.lifespan.lifespan_context'
 BOT_WEBHOOK_PATH = 'process-bot-updates'
-BOT_SECRET_TOKEN = config('BOT_SECRET_TOKEN')
 
-BOT_WEBHOOK_SECRET = config('BOT_WEBHOOK_SECRET')
+BOT_WEBHOOK_SECRET = config('BOT_WEBHOOK_SECRET', default='')
 
 CSRF_TRUSTED_ORIGINS = [
     "http://*.localhost:1040",
@@ -166,10 +165,10 @@ CSRF_TRUSTED_ORIGINS = [
 CORS_ALLOW_CREDENTIALS = True
 CORS_ALLOW_ALL_ORIGINS = True
 
-CLICK_SERVICE_ID = config('CLICK_SERVICE_ID')
-CLICK_MERCHANT_ID = config('CLICK_MERCHANT_ID')
-CLICK_SECRET_KEY = config('CLICK_SECRET_KEY')
-CLICK_MERCHANT_USER_ID = config('CLICK_MERCHANT_USER_ID')
+CLICK_SERVICE_ID = config('CLICK_SERVICE_ID', default='')
+CLICK_MERCHANT_ID = config('CLICK_MERCHANT_ID', default='')
+CLICK_SECRET_KEY = config('CLICK_SECRET_KEY', default='')
+CLICK_MERCHANT_USER_ID = config('CLICK_MERCHANT_USER_ID', default='')
 CLICK_BASE_URL = 'https://api.click.uz/v2/merchant/card_token'
 
 CLICK_AMOUNT_FIELD = "amount"
@@ -179,8 +178,6 @@ ADMIN_USERNAME = '@TurgunovKozimjon'
 OFERTA_URL = 'https://docs.google.com/document/d/1C-r5x3UCDvtMDa5TktbYFEtJJ0-jaMX0PzKKa-sfY3A/edit?tab=t.0'
 
 RUN_SCHEDULER = config('RUN_SCHEDULER', default=False, cast=bool)
-
-TRIBUTE_API_KEY = '9beb2a32-3886-482a-9dac-8e74a7cf'
 
 CELERY_BROKER_URL = f'redis://{config("REDIS_HOST", default="localhost")}:6379/1'
 CELERY_RESULT_BACKEND = CELERY_BROKER_URL
