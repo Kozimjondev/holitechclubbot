@@ -158,8 +158,7 @@ CSRF_TRUSTED_ORIGINS = [
     "http://*.localhost:1040",
     "http://*.localhost:8003",
     "http://95.46.96.71:1040",
-    "https://payment.im-tech.uz",
-    'https://yoldakorishamiz.nerofit.uz'
+    "https://api.holitechclub.uz",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
