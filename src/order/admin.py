@@ -76,7 +76,13 @@ class CourseAmountAdmin(admin.ModelAdmin):
 
 @admin.register(PrivateChannel)
 class PrivateChannelAdmin(admin.ModelAdmin):
-    list_display = ('id', 'private_channel_id', 'course', 'private_channel_link',)
+    list_display = ('id', 'private_channel_id', 'course', 'course_name', 'period')
     list_display_links = ('id', 'private_channel_id')
-    search_fields = ('private_channel_id', 'private_channel_link')
+    search_fields = ('private_channel_id',)
     ordering = ('-created_at',)
+
+    def period(self, obj):
+        return obj.course.period
+
+    def course_name(self, obj):
+        return obj.course.name
