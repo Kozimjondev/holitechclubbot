@@ -135,8 +135,8 @@ class UserCourseSubscription(TimestampedModel):
 
 class PrivateChannel(TimestampedModel):
     course = models.ForeignKey(Course, on_delete=models.CASCADE, related_name='private_channels')
-    private_channel_id = models.CharField(max_length=255, unique=True)
-    private_channel_link = models.URLField()
+    private_channel_id = models.CharField(max_length=255)
+    private_channel_link = models.URLField(null=True, blank=True)
 
     def __str__(self):
         return f"{self.course} - {self.private_channel_id}"
